@@ -19,8 +19,8 @@ endpoint that accepts JSON works.
 Needs `python3` and `git`. Works on Linux and macOS.
 
 ```sh
-gh repo clone vinzloh/diffy ~/code/diffy    # or: git clone git@github.com:vinzloh/diffy.git ~/code/diffy
-cd ~/code/diffy
+git clone https://github.com/vinzloh/diffy.git ~/workspace/diffy   # or: gh repo clone vinzloh/diffy ~/workspace/diffy
+cd ~/workspace/diffy
 ./install.sh --roots ~/code   # asks for webhook URL, key (hidden), machine label
 ```
 
