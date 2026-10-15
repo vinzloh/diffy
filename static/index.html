@@ -80,7 +80,7 @@ button{background:#238636;color:#fff;border:0;border-radius:6px;padding:5px 12px
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const S={repo:null,tab:'tree',scope:'all',base:'',commit:null,files:[],comments:[],seq:0,mode:localStorage.dr_mode||'split',hideViewed:false,collapsedDirs:new Set(),q:''};
-const api=async(p,o)=>(await fetch(p,o)).json();
+const api=async(p,o)=>{const r=await fetch(p,o);if(r.status===401)location.reload();return r.json()};
 const qs=o=>Object.entries(o).filter(([k,v])=>v!=null&&v!=='').map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
 const vkey=()=>'dr_viewed:'+S.repo+':'+(S.scope=='commit'?S.commit:S.scope+':'+S.base);
 const viewed=()=>{try{return new Set(JSON.parse(localStorage[vkey()]||'[]'))}catch{return new Set()}};

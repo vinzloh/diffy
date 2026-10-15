@@ -125,9 +125,23 @@ diffy serve --port 5000
 diffy serve --host 0.0.0.0       # also reachable from other devices, e.g. over Tailscale
 ```
 
-With `--host 0.0.0.0` the startup lines also print the machine's Tailscale
-and LAN addresses when they can be detected. Read the no-auth warning in
-[Security](#security) first.
+With `--host 0.0.0.0` diffy turns on a **passcode** and prints it, plus
+links for localhost, Tailscale and LAN with the passcode built in:
+
+```text
+diffy on http://localhost:4747/?k=Xy3kP9aQwRt
+  tailscale: http://100.x.y.z:4747/?k=Xy3kP9aQwRt
+  lan: http://192.168.1.20:4747/?k=Xy3kP9aQwRt
+  passcode: Xy3kP9aQwRt  (open a link once per browser; a cookie keeps you in until diffy restarts)
+Ctrl+C to stop
+```
+
+Click a link once per browser. diffy checks the code, sets a session cookie
+and drops `?k=` from the address bar. Without the cookie you get a passcode
+box instead. A new random passcode is made every run. To keep one fixed,
+add `"passcode": "..."` to `~/.config/diffy/config.json`. `--passcode CODE`
+works too, but it ends up in your shell history. Plain `diffy serve`
+(localhost) has no passcode.
 
 Other commands:
 
@@ -198,11 +212,15 @@ and the error is shown in the page.
   commits, checks out or writes to your repos.
 - The webhook key stays in the config file on the server side. It is never
   sent to the browser or logged.
-- There is **no authentication** on the page. By default diffy binds
-  `127.0.0.1`, so only this machine can open it. With `--host 0.0.0.0` anyone
-  who can reach the port can read your diffs and submit reviews to your
-  webhook, so only do that on a private network such as a Tailscale tailnet,
-  or behind a firewall.
+- By default diffy binds `127.0.0.1`, so only this machine can open it, and
+  there is no passcode.
+- With a non-loopback `--host` (e.g. `0.0.0.0`) every route, including the
+  API and Submit, needs a passcode or a session cookie. The cookie is
+  `HttpOnly` and `SameSite=Strict` and stops working when diffy restarts.
+  Codes are compared in constant time. Each wrong attempt waits 1 s, and an
+  IP is locked out for 10 minutes after 10 wrong attempts.
+- Traffic is plain HTTP, so keep it on a private network such as a
+  Tailscale tailnet (which encrypts it), not the open internet.
 
 ## License
 

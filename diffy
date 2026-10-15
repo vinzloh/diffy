@@ -2,13 +2,18 @@
 """diffy: a local, read-only git diff reviewer that posts line comments to a webhook.
 
 Usage:
-  diffy serve [--host 127.0.0.1] [--port 4747]
+  diffy serve [--host 127.0.0.1] [--port 4747] [--passcode CODE]
   diffy rediscover      re-scan repo roots and print the repos found
   diffy ping            POST {"action":"ping"} to the webhook once
+
+Passcode: on localhost (the default) there is none. With a non-loopback --host
+(e.g. 0.0.0.0 for Tailscale) every page and API call needs a passcode: "passcode"
+from config.json, else --passcode, else a fresh random one each run. Startup prints
+links with ?k=CODE; opening one once sets a session cookie in that browser.
 """
-import argparse, json, os, socket, subprocess, sys, time, urllib.request, urllib.error
+import argparse, hmac, json, os, secrets, threading, socket, subprocess, sys, time, urllib.request, urllib.error
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlencode
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 CONF_DIR = os.environ.get("DIFFY_CONFIG_DIR", os.path.join(os.path.expanduser("~"), ".config", "diffy"))
@@ -148,14 +153,70 @@ def post_webhook(payload):
         f.write(json.dumps({"ts": int(time.time()), "error": err, "payload": payload}) + "\n")
     return None, err
 
+PASSCODE = None              # set in main() when bound to a non-loopback host
+SESSION = secrets.token_urlsafe(32)   # cookie value; new each run
+FAILS = {}; FAILS_LOCK = threading.Lock(); MAX_FAILS = 10; LOCKOUT = 600
+LOGIN = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>diffy</title><style>body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0d1117;
+color:#c9d1d9;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}form{background:#161b22;border:1px solid #30363d;
+border-radius:8px;padding:24px;width:280px}h1{font-size:16px;margin:0 0 12px}input{box-sizing:border-box;width:100%;padding:8px;
+background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;font:inherit}button{margin-top:12px;width:100%;padding:8px;
+background:#238636;color:#fff;border:0;border-radius:6px;font:inherit;cursor:pointer}.e{color:#f85149;margin:8px 0 0}</style></head>
+<body><form method="post" action="/login"><h1>diffy</h1><input name="k" type="password" placeholder="Passcode" autofocus autocomplete="current-password">
+<button>Open</button>{{ERR}}</form></body></html>"""
+
+def locked(ip):
+    with FAILS_LOCK:
+        n, t = FAILS.get(ip, (0, 0))
+        if n >= MAX_FAILS and time.time() - t < LOCKOUT: return True
+        if n >= MAX_FAILS: FAILS.pop(ip, None)
+    return False
+
+def check_code(ip, code):
+    """True if code is right. Wrong codes are counted per IP and slowed down."""
+    if locked(ip): return False
+    if code and hmac.compare_digest(code.encode(), PASSCODE.encode()):
+        with FAILS_LOCK: FAILS.pop(ip, None)
+        return True
+    with FAILS_LOCK:
+        n, _ = FAILS.get(ip, (0, 0)); FAILS[ip] = (n + 1, time.time())
+    time.sleep(1)
+    return False
+
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def send(self, code, body, ctype="application/json"):
         b = body.encode() if isinstance(body, str) else body
         self.send_response(code); self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+    def has_session(self):
+        for part in self.headers.get("Cookie", "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == "diffy_session" and hmac.compare_digest(v.encode(), SESSION.encode()): return True
+        return False
+    def grant(self, location):
+        self.send_response(303)
+        self.send_header("Set-Cookie", f"diffy_session={SESSION}; HttpOnly; SameSite=Strict; Path=/")
+        self.send_header("Location", location); self.send_header("Content-Length", "0"); self.end_headers()
+    def login_page(self, code=200, err=""):
+        self.send(code, LOGIN.replace("{{ERR}}", f"<p class=\"e\">{err}</p>" if err else ""), "text/html; charset=utf-8")
+    def gate(self, u, q):
+        """Returns True if the request may proceed; otherwise has already responded."""
+        if PASSCODE is None or self.has_session(): return True
+        ip = self.client_address[0]
+        if "k" in q:
+            if check_code(ip, q["k"]):
+                rest = {k: v for k, v in q.items() if k != "k"}
+                self.grant(u.path + ("?" + urlencode(rest) if rest else "")); return False
+            self.login_page(429 if locked(ip) else 401, "Too many attempts. Try later." if locked(ip) else "Wrong passcode."); return False
+        if u.path.startswith("/api/"): self.send(401, '{"error":"passcode required"}')
+        else: self.login_page(401)
+        return False
     def do_GET(self):
-        u = urlparse(self.path); q = {k: v[0] for k, v in parse_qs(u.query).items()}; repos = load_repos()
+        u = urlparse(self.path); q = {k: v[0] for k, v in parse_qs(u.query).items()}
+        if not self.gate(u, q): return
+        repos = load_repos()
         if u.path == "/" and not has_scope(): return self.send(200, NO_SCOPE, "text/html; charset=utf-8")
         if u.path == "/": return self.send(200, open(os.path.join(HERE, "static", "index.html"), "rb").read(), "text/html; charset=utf-8")
         if u.path in ("/vendor/highlight.min.js", "/vendor/github-dark.min.css"):
@@ -175,6 +236,14 @@ class H(BaseHTTPRequestHandler):
             return self.send(200, json.dumps(info))
         self.send(404, '{"error":"not found"}')
     def do_POST(self):
+        if PASSCODE is not None and urlparse(self.path).path == "/login":
+            ip = self.client_address[0]
+            try: body = self.rfile.read(min(int(self.headers.get("Content-Length", 0)), 4096)).decode()
+            except Exception: body = ""
+            code = parse_qs(body).get("k", [""])[0]
+            if check_code(ip, code): return self.grant("/")
+            return self.login_page(429 if locked(ip) else 401, "Too many attempts. Try later." if locked(ip) else "Wrong passcode.")
+        if not self.gate(urlparse(self.path), {}): return
         if urlparse(self.path).path != "/api/submit": return self.send(404, '{"error":"not found"}')
         try:
             data = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
@@ -209,6 +278,7 @@ def main():
     ap.add_argument("cmd", nargs="?", default="serve", choices=["serve", "ping", "rediscover"])
     ap.add_argument("--host", default=None, help="bind address (default 127.0.0.1, or config host); 0.0.0.0 to allow other devices")
     ap.add_argument("--port", type=int, default=None, help="port (default 4747, or config port)")
+    ap.add_argument("--passcode", default=None, help="passcode for non-localhost binds (default: config passcode, else random per run); note it lands in shell history")
     a = ap.parse_args()
     if a.cmd in ("rediscover", "serve") and not has_scope():
         print("diffy: no repo folder configured. Run: ./install.sh --roots ~/your/repos", file=sys.stderr)
@@ -222,11 +292,17 @@ def main():
     except Exception: c = {}
     host = a.host or c.get("host") or "127.0.0.1"; port = a.port or int(c.get("port", 4747))
     if has_scope(): discover()
-    print(f"diffy on http://localhost:{port}/", flush=True)
+    global PASSCODE
     if host not in ("127.0.0.1", "localhost", "::1"):
+        if a.passcode: print("diffy: note --passcode is saved in your shell history; prefer \"passcode\" in config.json", file=sys.stderr)
+        PASSCODE = a.passcode or c.get("passcode") or secrets.token_urlsafe(8)
+        k = "?" + urlencode({"k": PASSCODE})
+        print(f"diffy on http://localhost:{port}/{k}", flush=True)
         for label, ip in other_ips():
-            print(f"  {label}: http://{ip}:{port}/", flush=True)
-        print("  warning: no authentication; anyone who can reach this port can read your diffs", flush=True)
+            print(f"  {label}: http://{ip}:{port}/{k}", flush=True)
+        print(f"  passcode: {PASSCODE}  (open a link once per browser; a cookie keeps you in until diffy restarts)", flush=True)
+    else:
+        print(f"diffy on http://localhost:{port}/", flush=True)
     print("Ctrl+C to stop", flush=True)
     try: ThreadingHTTPServer((host, port), H).serve_forever()
     except KeyboardInterrupt: pass
