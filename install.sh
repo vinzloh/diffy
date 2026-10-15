@@ -2,6 +2,7 @@
 # diffy installer: sets up ~/.config/diffy/config.json and the ~/.local/bin/diffy
 # command. Idempotent; re-run any time. Run the reviewer with `diffy serve`.
 #   ./install.sh [--port N] [--host ADDR] [--roots DIR[,DIR]] [--machine LABEL] [--uninstall]
+# --machine defaults to the short hostname; --roots defaults to ~ (4 levels deep).
 # Non-interactive first install: set DIFFY_WEBHOOK_URL and DIFFY_WEBHOOK_KEY
 # (optional DIFFY_MACHINE, DIFFY_ROOTS) in the environment.
 set -euo pipefail
@@ -38,6 +39,7 @@ fi
 command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 1; }
 command -v git >/dev/null || { echo "git is required" >&2; exit 1; }
 mkdir -p "$CONF_DIR"; chmod 700 "$CONF_DIR"
+DEFAULT_LABEL="$(hostname -s 2>/dev/null || uname -n)"; DEFAULT_LABEL="${DEFAULT_LABEL%%.*}"
 
 if [ ! -f "$CONF" ]; then
   URL="${DIFFY_WEBHOOK_URL:-}"; KEY="${DIFFY_WEBHOOK_KEY:-}"
@@ -45,11 +47,11 @@ if [ ! -f "$CONF" ]; then
     echo "No config yet at $CONF"
     [ -n "$URL" ] || read -rp "Webhook URL: " URL
     [ -n "$KEY" ] || { read -rsp "Webhook key (hidden): " KEY; echo; }
-    [ -n "$LABEL" ] || read -rp "Machine label [$(hostname)]: " LABEL || true
+    [ -n "$LABEL" ] || read -rp "Machine label [$DEFAULT_LABEL]: " LABEL || true
   fi
   [ -n "$URL" ] && [ -n "$KEY" ] || { echo "webhook URL and key are required" >&2; exit 1; }
   ( umask 077
-    URL="$URL" KEY="$KEY" LABEL="${LABEL:-$(hostname)}" python3 -c '
+    URL="$URL" KEY="$KEY" LABEL="${LABEL:-$DEFAULT_LABEL}" python3 -c '
 import json, os
 json.dump({"url": os.environ["URL"], "key": os.environ["KEY"], "machine": os.environ["LABEL"]}, open(os.environ["CONF"], "w"), indent=1)
 ' ) 
@@ -75,6 +77,8 @@ if [ -f "$HOME/.config/systemd/user/diffy.service" ]; then
   systemctl --user disable --now diffy.service 2>/dev/null || true
   rm -f "$HOME/.config/systemd/user/diffy.service"; systemctl --user daemon-reload 2>/dev/null || true
 fi
-"$BIN" rediscover
+python3 -c 'import json,os;c=json.load(open(os.environ["CONF"]));print("Machine label:", c.get("machine") or "(hostname)");print("Repo roots:", ", ".join(c.get("roots") or (["(explicit list)"] if c.get("repos") else ["~ (depth %s)" % c.get("depth", 4)])))'
+echo "Repos found:"
+"$BIN" rediscover | sed 's/^/  /'
 echo "diffy is set up. Start it with:  diffy serve   (Ctrl+C to stop)"
 case ":$PATH:" in *":$(dirname "$BIN"):"*) ;; *) echo "Note: $(dirname "$BIN") is not on your PATH; add it, or run $BIN";; esac

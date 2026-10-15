@@ -14,34 +14,84 @@ endpoint that accepts JSON works.
 - Split or unified view, syntax highlighting (vendored highlight.js, no CDN).
 - Line comments, file comments, an overall summary, and one Submit button.
 
-## Install
+## Quick start
 
-Needs `python3` and `git`. Works on Linux and macOS.
+Needs `python3` and `git` (Linux or macOS).
 
 ```sh
-git clone https://github.com/vinzloh/diffy.git ~/workspace/diffy   # or: gh repo clone vinzloh/diffy ~/workspace/diffy
-cd ~/workspace/diffy
-./install.sh --roots ~/code   # asks for webhook URL, key (hidden), machine label
+git clone https://github.com/vinzloh/diffy.git ~/workspace/diffy && cd ~/workspace/diffy && ./install.sh
+diffy serve
 ```
 
-The installer only writes `~/.config/diffy/config.json` (mode 600) and links
-`~/.local/bin/diffy` to the clone, so keep the clone where it is. Options:
+The installer asks for the webhook URL and key (hidden) and a machine label
+(default: short hostname), writes `~/.config/diffy/config.json` (mode 600),
+links `~/.local/bin/diffy` to the clone (so keep the clone where it is), and
+prints the label and the repos it found. Options:
 
-- `--roots DIR[,DIR]` folders to scan for repos (default: your whole home, 4 levels deep)
-- `--machine LABEL` name sent as `machine` (default: hostname)
+- `--roots DIR[,DIR]` folders to scan for repos (default: `~`, 4 levels deep)
+- `--machine LABEL` name sent as `machine` (default: `hostname -s`)
 - `--port 4747` (default), `--host 0.0.0.0` (default), saved as the defaults for `diffy serve`
 
 Re-run it with any flag to change the config later (e.g. `./install.sh --port 5000`).
+For a non-interactive install, see [Setup for agents](#setup-for-agents).
 
-Non-interactive install (scripts, provisioning): set the values in the
-environment instead of answering prompts. Keep the key out of shell history,
-e.g. read it from a file:
+## Setup for agents
 
-```sh
-DIFFY_WEBHOOK_URL=https://example.com/webhook \
-DIFFY_WEBHOOK_KEY="$(cat /path/to/keyfile)" \
-./install.sh --machine laptop --roots ~/code
-```
+A recipe an AI agent (Grok Bot, Cursor, Claude Code, ...) can run end to end.
+The only inputs needed from the user are the webhook URL and key.
+
+**Rules:** never echo, print or log the key, and never ask for it in chat. Read
+it from the user's secret store or an environment variable, and pass it only via
+`DIFFY_WEBHOOK_KEY`. Every step is safe to re-run.
+
+1. Check prerequisites. If either is missing, install it with the system
+   package manager (e.g. `sudo pacman -S python git`, `sudo apt install python3 git`,
+   `brew install python git`) or ask the user to.
+
+   ```sh
+   command -v python3 && command -v git
+   ```
+
+2. Clone, or update an existing clone:
+
+   ```sh
+   DIR=~/workspace/diffy
+   if [ -d "$DIR/.git" ]; then git -C "$DIR" pull --ff-only; else git clone https://github.com/vinzloh/diffy.git "$DIR"; fi
+   ```
+
+3. Install without prompts (an existing config is kept; flags update it):
+
+   ```sh
+   DIFFY_WEBHOOK_URL="$URL" DIFFY_WEBHOOK_KEY="$KEY" "$DIR/install.sh" --roots ~/workspace </dev/null
+   ```
+
+   Drop `--roots` to scan all of `~`. Check the printed machine label and repo
+   list with the user; re-run with `--roots` or `--machine` to change them.
+
+4. Verify, then stop (or leave it running if the user wants):
+
+   ```sh
+   ~/.local/bin/diffy serve >/dev/null 2>&1 & PID=$!
+   for i in $(seq 1 15); do sleep 1; curl -fs -o /dev/null http://localhost:4747/ && break; done
+   curl -s -o /dev/null -w '%{http_code}\n' http://localhost:4747/   # expect 200
+   ~/.local/bin/diffy ping                                            # expect "ping: 200"
+   kill $PID
+   ```
+
+5. Tell the webhook receiver what to expect: `action` (`submit`, or `ping`
+   to ignore), `machine`, `repo`, `branch`, optional `scope`/`base`/`commit`,
+   `summary`, and `comments[]` of `{file, line, side, code, text}` (`line`
+   null for file comments). Full schema: [Webhook payload](#webhook-payload).
+
+6. Uninstall: `"$DIR/install.sh" --uninstall && rm -rf "$DIR"`
+
+### Using with Grok Bot
+
+Create a webhook routine on your Grok Bot whose prompt treats the POST body as
+untrusted data and acts on `action: "submit"` (for example, hand the comments
+to the bot that owns that repo) while ignoring `ping`. Copy the routine's
+webhook URL from its panel, and give the sender key to the agent as a secret
+(the app's secret box, never chat). Then run the recipe above with those values.
 
 ## Run
 
@@ -81,7 +131,7 @@ link, and any systemd service from older versions), then delete the clone.
 }
 ```
 
-Only `url` and `key` are required. `machine` defaults to the hostname.
+Only `url` and `key` are required. `machine` defaults to the short hostname.
 Repos: if `repos` is set, only those are shown (plus anything under `roots` if
 `roots` is also set). Otherwise diffy scans `roots` (default `~`) up to `depth`
 levels for git repos, skipping hidden and dependency folders. A repo's name is

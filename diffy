@@ -20,9 +20,12 @@ SKIP = {"node_modules", ".cache", ".local", ".npm", ".cargo", ".rustup", "go", "
 def config():
     with open(CONF) as f: return json.load(f)
 
+def short_host():
+    return socket.gethostname().split(".")[0] or os.uname().nodename
+
 def machine():
-    try: return config().get("machine") or socket.gethostname()
-    except Exception: return socket.gethostname()
+    try: return config().get("machine") or short_host()
+    except Exception: return short_host()
 
 def discover():
     c = config(); found = {}
