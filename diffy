@@ -37,9 +37,10 @@ def discover():
     for p in c.get("repos") or []:
         p = os.path.expanduser(p)
         if os.path.isdir(os.path.join(p, ".git")): add(p)
-    if not c.get("repos") or c.get("roots"):
+    if c.get("roots"):
         depth = int(c.get("depth", 4))
-        for root in [os.path.expanduser(r) for r in (c.get("roots") or ["~"])]:
+        for root in [os.path.expanduser(r) for r in c["roots"]]:
+            if not os.path.isdir(root): continue
             base = root.rstrip(os.sep).count(os.sep)
             for d, dirs, _ in os.walk(root):
                 if ".git" in dirs:
@@ -50,7 +51,21 @@ def discover():
     with open(REPOS, "w") as f: json.dump(found, f, indent=1)
     return found
 
+def has_scope():
+    try: c = config()
+    except Exception: return False
+    return bool(c.get("roots") or c.get("repos"))
+
+NO_SCOPE = """<!doctype html><meta charset="utf-8"><title>diffy: no repo folder</title>
+<body style="background:#0d1117;color:#d1d7e0;font:15px system-ui;padding:40px;max-width:640px">
+<h2>diffy has no repo folder configured</h2>
+<p>diffy only shows repos inside folders you choose. It never scans your whole home folder.</p>
+<p>Run the installer with the folder that holds your repos, then restart <code>diffy serve</code>:</p>
+<pre style="background:#161b22;padding:12px;border-radius:6px">./install.sh --roots ~/workspace</pre>
+</body>"""
+
 def load_repos():
+    if not has_scope(): return {}
     try:
         with open(REPOS) as f: return json.load(f)
     except Exception: return discover()
@@ -141,6 +156,7 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
     def do_GET(self):
         u = urlparse(self.path); q = {k: v[0] for k, v in parse_qs(u.query).items()}; repos = load_repos()
+        if u.path == "/" and not has_scope(): return self.send(200, NO_SCOPE, "text/html; charset=utf-8")
         if u.path == "/": return self.send(200, open(os.path.join(HERE, "static", "index.html"), "rb").read(), "text/html; charset=utf-8")
         if u.path in ("/vendor/highlight.min.js", "/vendor/github-dark.min.css"):
             with open(os.path.join(HERE, "vendor", "highlight.js", u.path.split("/")[-1]), "rb") as f:
@@ -180,6 +196,9 @@ def main():
     ap.add_argument("--host", default=None, help="bind address (default 0.0.0.0, or config host)")
     ap.add_argument("--port", type=int, default=None, help="port (default 4747, or config port)")
     a = ap.parse_args()
+    if a.cmd in ("rediscover", "serve") and not has_scope():
+        print("diffy: no repo folder configured. Run: ./install.sh --roots ~/your/repos", file=sys.stderr)
+        if a.cmd == "rediscover": sys.exit(2)
     if a.cmd == "rediscover":
         for n, p in discover().items(): print(f"{n}\t{p}")
         return
@@ -188,7 +207,7 @@ def main():
     try: c = config()
     except Exception: c = {}
     host = a.host or c.get("host") or "0.0.0.0"; port = a.port or int(c.get("port", 4747))
-    discover()
+    if has_scope(): discover()
     print(f"diffy on http://{host}:{port}", flush=True)
     ThreadingHTTPServer((host, port), H).serve_forever()
 

@@ -2,9 +2,10 @@
 # diffy installer: sets up ~/.config/diffy/config.json and the ~/.local/bin/diffy
 # command. Idempotent; re-run any time. Run the reviewer with `diffy serve`.
 #   ./install.sh [--port N] [--host ADDR] [--roots DIR[,DIR]] [--machine LABEL] [--uninstall]
-# --machine defaults to the short hostname; --roots defaults to ~ (4 levels deep).
+# --roots (or DIFFY_ROOTS) is required on first install: the folder(s) holding your repos.
+# diffy never scans your whole home folder. --machine defaults to the short hostname.
 # Non-interactive first install: set DIFFY_WEBHOOK_URL and DIFFY_WEBHOOK_KEY
-# (optional DIFFY_MACHINE, DIFFY_ROOTS) in the environment.
+# plus --roots or DIFFY_ROOTS (optional DIFFY_MACHINE) in the environment.
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONF_DIR="${DIFFY_CONFIG_DIR:-$HOME/.config/diffy}"
@@ -40,6 +41,36 @@ command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 1; }
 command -v git >/dev/null || { echo "git is required" >&2; exit 1; }
 mkdir -p "$CONF_DIR"; chmod 700 "$CONF_DIR"
 DEFAULT_LABEL="$(hostname -s 2>/dev/null || uname -n)"; DEFAULT_LABEL="${DEFAULT_LABEL%%.*}"
+
+# --- repo folders: required, never defaults to ~
+HAVE_SCOPE=0
+[ -f "$CONF" ] && python3 -c 'import json,os,sys;c=json.load(open(os.environ["CONF"]));sys.exit(0 if (c.get("roots") or c.get("repos")) else 1)' 2>/dev/null && HAVE_SCOPE=1
+if [ -z "$ROOTS" ] && [ "$HAVE_SCOPE" = 0 ]; then
+  if [ -t 0 ]; then
+    SUG=""; [ -d "$HOME/workspace" ] && SUG="$HOME/workspace"
+    read -rp "Folder(s) that hold your repos, comma-separated${SUG:+ [$SUG]}: " ROOTS || true
+    ROOTS="${ROOTS:-$SUG}"
+    [ -n "$ROOTS" ] || { echo "A repo folder is required." >&2; exit 1; }
+    read -rp "Scan $ROOTS for git repos? [y/N]: " OK || true
+    case "$OK" in y|Y|yes|YES) ;; *) echo "Aborted. Re-run with --roots DIR." >&2; exit 1;; esac
+  else
+    echo "error: no repo folder given. Pass --roots DIR[,DIR] or set DIFFY_ROOTS (e.g. ./install.sh --roots ~/workspace)." >&2
+    echo "diffy never scans your whole home folder." >&2
+    exit 1
+  fi
+fi
+if [ -n "$ROOTS" ]; then
+  ABS=""
+  IFS=',' read -ra _R <<< "$ROOTS"
+  for r in "${_R[@]}"; do
+    r="$(echo "$r" | sed 's/^ *//; s/ *$//')"; [ -n "$r" ] || continue
+    r="${r/#\~/$HOME}"
+    [ -d "$r" ] || { echo "error: repo folder does not exist: $r" >&2; exit 1; }
+    [ "$(cd "$r" && pwd -P)" = "$(cd "$HOME" && pwd -P)" ] && { echo "error: refusing to scan your whole home folder; pick the folder that holds your repos." >&2; exit 1; }
+    ABS="${ABS:+$ABS,}$(cd "$r" && pwd -P)"
+  done
+  ROOTS="$ABS"
+fi
 
 if [ ! -f "$CONF" ]; then
   URL="${DIFFY_WEBHOOK_URL:-}"; KEY="${DIFFY_WEBHOOK_KEY:-}"
@@ -77,7 +108,7 @@ if [ -f "$HOME/.config/systemd/user/diffy.service" ]; then
   systemctl --user disable --now diffy.service 2>/dev/null || true
   rm -f "$HOME/.config/systemd/user/diffy.service"; systemctl --user daemon-reload 2>/dev/null || true
 fi
-python3 -c 'import json,os;c=json.load(open(os.environ["CONF"]));print("Machine label:", c.get("machine") or "(hostname)");print("Repo roots:", ", ".join(c.get("roots") or (["(explicit list)"] if c.get("repos") else ["~ (depth %s)" % c.get("depth", 4)])))'
+python3 -c 'import json,os;c=json.load(open(os.environ["CONF"]));print("Machine label:", c.get("machine") or "(hostname)");print("Repo roots:", ", ".join(c.get("roots") or ["(explicit repos list)"]), "(depth %s)" % c.get("depth", 4))'
 echo "Repos found:"
 "$BIN" rediscover | sed 's/^/  /'
 echo "diffy is set up. Start it with:  diffy serve   (Ctrl+C to stop)"

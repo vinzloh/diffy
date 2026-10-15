@@ -19,16 +19,19 @@ endpoint that accepts JSON works.
 Needs `python3` and `git` (Linux or macOS).
 
 ```sh
-git clone https://github.com/vinzloh/diffy.git ~/workspace/diffy && cd ~/workspace/diffy && ./install.sh
+git clone https://github.com/vinzloh/diffy.git ~/workspace/diffy && cd ~/workspace/diffy && ./install.sh --roots ~/workspace
 diffy serve
 ```
 
-The installer asks for the webhook URL and key (hidden) and a machine label
+`--roots` is required: the folder(s) that hold your repos (comma-separated).
+diffy never scans your whole home folder; without `--roots` an interactive
+install asks for the folder and a non-interactive one stops with an error.
+The installer also asks for the webhook URL and key (hidden) and a machine label
 (default: short hostname), writes `~/.config/diffy/config.json` (mode 600),
 links `~/.local/bin/diffy` to the clone (so keep the clone where it is), and
 prints the label and the repos it found. Options:
 
-- `--roots DIR[,DIR]` folders to scan for repos (default: `~`, 4 levels deep)
+- `--roots DIR[,DIR]` **required**: folders to scan for repos, 4 levels deep (or set `DIFFY_ROOTS`)
 - `--machine LABEL` name sent as `machine` (default: `hostname -s`)
 - `--port 4747` (default), `--host 0.0.0.0` (default), saved as the defaults for `diffy serve`
 
@@ -38,7 +41,9 @@ For a non-interactive install, see [Setup for agents](#setup-for-agents).
 ## Setup for agents
 
 A recipe an AI agent (Grok Bot, Cursor, Claude Code, ...) can run end to end.
-The only inputs needed from the user are the webhook URL and key.
+Inputs needed from the user: the webhook URL, the key, and **the folder that
+holds their repos**. Ask the user for the folder. Never guess it, and never
+use their home folder.
 
 **Rules:** never echo, print or log the key, and never ask for it in chat. Read
 it from the user's secret store or an environment variable, and pass it only via
@@ -62,11 +67,12 @@ it from the user's secret store or an environment variable, and pass it only via
 3. Install without prompts (an existing config is kept; flags update it):
 
    ```sh
-   DIFFY_WEBHOOK_URL="$URL" DIFFY_WEBHOOK_KEY="$KEY" "$DIR/install.sh" --roots ~/workspace </dev/null
+   ROOTS=~/workspace   # the folder the user told you, not a guess
+   DIFFY_WEBHOOK_URL="$URL" DIFFY_WEBHOOK_KEY="$KEY" "$DIR/install.sh" --roots "$ROOTS" </dev/null
    ```
 
-   Drop `--roots` to scan all of `~`. Check the printed machine label and repo
-   list with the user; re-run with `--roots` or `--machine` to change them.
+   `--roots` is required; the install fails without it or if the folder is
+   missing. Check the printed machine label and repo list with the user; re-run with `--roots` or `--machine` to change them.
 
 4. Verify, then stop (or leave it running if the user wants):
 
@@ -131,9 +137,9 @@ link, and any systemd service from older versions), then delete the clone.
 }
 ```
 
-Only `url` and `key` are required. `machine` defaults to the short hostname.
-Repos: if `repos` is set, only those are shown (plus anything under `roots` if
-`roots` is also set). Otherwise diffy scans `roots` (default `~`) up to `depth`
+`url`, `key` and `roots` (or `repos`) are required. `machine` defaults to the short hostname.
+Repos: diffy shows the repos listed in `repos` plus any git repos found under
+`roots`, scanning up to `depth`
 levels for git repos, skipping hidden and dependency folders. A repo's name is
 its directory name. Run `diffy rediscover` after adding repos.
 
