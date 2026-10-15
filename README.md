@@ -216,7 +216,7 @@ and the error is shown in the page.
   there is no passcode.
 - With a non-loopback `--host` (e.g. `0.0.0.0`) every route, including the
   API and Submit, needs a passcode or a session cookie. The cookie is
-  `HttpOnly` and `SameSite=Strict` and stops working when diffy restarts.
+  `HttpOnly` and `SameSite=Lax` (so links opened from other apps work). If a browser refuses the cookie (strict privacy or incognito settings), the page keeps the code in sessionStorage, or in memory if storage is blocked too, and sends it as an `X-Diffy-Key` header and stops working when diffy restarts.
   Codes are compared in constant time. Each wrong attempt waits 1 s, and an
   IP is locked out for 10 minutes after 10 wrong attempts.
 - Traffic is plain HTTP, so keep it on a private network such as a

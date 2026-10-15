@@ -79,12 +79,16 @@ button{background:#238636;color:#fff;border:0;border-radius:6px;padding:5px 12px
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const S={repo:null,tab:'tree',scope:'all',base:'',commit:null,files:[],comments:[],seq:0,mode:localStorage.dr_mode||'split',hideViewed:false,collapsedDirs:new Set(),q:''};
-const api=async(p,o)=>{const r=await fetch(p,o);if(r.status===401)location.reload();return r.json()};
+const LS=(()=>{try{localStorage.getItem("x");return localStorage}catch(e){return {}}})();
+const S={repo:null,tab:'tree',scope:'all',base:'',commit:null,files:[],comments:[],seq:0,mode:LS.dr_mode||'split',hideViewed:false,collapsedDirs:new Set(),q:''};
+let memKey=null;(()=>{const u=new URL(location.href);if(u.searchParams.has("k")){memKey=u.searchParams.get("k");try{sessionStorage.setItem("diffyKey",memKey)}catch(e){}u.searchParams.delete("k");u.searchParams.delete("nocookie");history.replaceState(null,"",u.pathname+u.search+u.hash)}})();
+const diffyKey=()=>{try{return sessionStorage.getItem("diffyKey")||memKey}catch(e){return memKey}};
+const api=async(p,o={})=>{const k=diffyKey();if(k)o={...o,headers:{...(o.headers||{}),"X-Diffy-Key":k}};const r=await fetch(p,o);
+  if(r.status===401){if(k){try{sessionStorage.removeItem("diffyKey")}catch(e){}}location.replace(k?"/?k="+encodeURIComponent(k):"/");}return r.json()};
 const qs=o=>Object.entries(o).filter(([k,v])=>v!=null&&v!=='').map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
 const vkey=()=>'dr_viewed:'+S.repo+':'+(S.scope=='commit'?S.commit:S.scope+':'+S.base);
-const viewed=()=>{try{return new Set(JSON.parse(localStorage[vkey()]||'[]'))}catch{return new Set()}};
-const setViewed=(f,on)=>{const v=viewed();on?v.add(f):v.delete(f);localStorage[vkey()]=JSON.stringify([...v]);};
+const viewed=()=>{try{return new Set(JSON.parse(LS[vkey()]||'[]'))}catch{return new Set()}};
+const setViewed=(f,on)=>{const v=viewed();on?v.add(f):v.delete(f);LS[vkey()]=JSON.stringify([...v]);};
 function ago(ts){const s=Date.now()/1e3-ts;for(const[u,n]of[['y',31536e3],['mo',2592e3],['d',86400],['h',3600],['m',60]])if(s>=n)return Math.floor(s/n)+u;return 'now'}
 const LANG={ts:'typescript',tsx:'typescript',js:'javascript',jsx:'javascript',mjs:'javascript',cjs:'javascript',py:'python',rb:'ruby',go:'go',rs:'rust',json:'json',css:'css',scss:'scss',html:'xml',xml:'xml',svg:'xml',md:'markdown',yml:'yaml',yaml:'yaml',sh:'bash',bash:'bash',sql:'sql',java:'java',kt:'kotlin',php:'php',toml:'ini',ini:'ini',graphql:'graphql',gql:'graphql',liquid:'xml',c:'c',h:'c',cpp:'cpp',swift:'swift',dockerfile:'dockerfile'};
 function hl(code,lang){if(!lang||!window.hljs||!hljs.getLanguage(lang))return esc(code);try{return hljs.highlight(code,{language:lang,ignoreIllegals:true}).value}catch{return esc(code)}}
@@ -102,8 +106,8 @@ function parse(d){const out=[];for(const f of d.split(/^(?=diff --git )/m)){if(!
 
 async function loadRepos(){const r=await api('/api/repos');$('#m').textContent='@ '+r.machine;
  $('#repos').innerHTML=r.repos.map(x=>`<option value="${esc(x.name)}">${esc(x.name)} · ${esc(x.branch)} · ${x.dirty} dirty</option>`).join('');
- const want=localStorage.dr_repo;S.repo=r.repos.some(x=>x.name==want)?want:(r.repos[0]||{}).name;$('#repos').value=S.repo;await loadRepo();}
-async function loadRepo(){if(!S.repo)return;localStorage.dr_repo=S.repo;const b=await api('/api/branches?'+qs({repo:S.repo}));
+ const want=LS.dr_repo;S.repo=r.repos.some(x=>x.name==want)?want:(r.repos[0]||{}).name;$('#repos').value=S.repo;await loadRepo();}
+async function loadRepo(){if(!S.repo)return;LS.dr_repo=S.repo;const b=await api('/api/branches?'+qs({repo:S.repo}));
  S.base=b.default;$('#base').innerHTML=b.refs.map(r=>`<option${r==S.base?' selected':''}>${esc(r)}</option>`).join('');S.commit=null;await loadDiff();}
 function guard(){return !S.comments.length||confirm('Discard '+S.comments.length+' unsent comment(s)?')}
 async function loadDiff(){S.comments=[];upd();$('#pane').innerHTML='<div class="empty">Loading…</div>';
@@ -195,7 +199,7 @@ $('#filt').onclick=()=>{S.hideViewed=!S.hideViewed;$('#filt').style.color=S.hide
 $('#colf').onclick=()=>{const fs=$$('.file');const any=fs.some(f=>!f.classList.contains('c'));fs.forEach(f=>f.classList.toggle('c',any))};
 $('#tog').onclick=()=>$('#side').classList.toggle('hide');
 $('#wrapb').onclick=()=>{document.body.classList.toggle('nowrap');const on=document.body.classList.contains('nowrap');$$('table.df td').forEach(td=>td.style.whiteSpace=on?'pre':'')};
-function setMode(m){S.mode=m;localStorage.dr_mode=m;$$('#mode div').forEach(x=>x.classList.toggle('on',x.dataset.m==m));}
+function setMode(m){S.mode=m;LS.dr_mode=m;$$('#mode div').forEach(x=>x.classList.toggle('on',x.dataset.m==m));}
 setMode(S.mode);$$('#mode div').forEach(x=>x.onclick=()=>{setMode(x.dataset.m);renderPane()});
 $('#sub').onclick=async()=>{const s=$('#sum').value.trim();if(!S.comments.length&&!s)return alert('Add a comment or summary first');$('#sub').disabled=true;$('#msg').textContent='Sending…';
  const body={repo:S.repo,summary:s,scope:S.commit?'commit':S.scope,base:(S.scope=='all'||S.commit)?S.base:'',commit:S.commit||'',comments:S.comments.map(({file,line,side,code,text})=>({file,line,side,code,text}))};
