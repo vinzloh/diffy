@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
 # diffy installer: idempotent. Re-run any time (e.g. after `git pull`).
-#   ./install.sh [--port N] [--host ADDR] [--uninstall]
+#   ./install.sh [--port N] [--host ADDR] [--roots DIR[,DIR]] [--machine LABEL] [--uninstall]
+# Non-interactive first install: set DIFFY_WEBHOOK_URL and DIFFY_WEBHOOK_KEY
+# (optional DIFFY_MACHINE, DIFFY_ROOTS) in the environment.
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONF_DIR="${DIFFY_CONFIG_DIR:-$HOME/.config/diffy}"
 export CONF="$CONF_DIR/config.json"
 UNIT="$HOME/.config/systemd/user/diffy.service"
 BIN="$HOME/.local/bin/diffy"
-PORT=""; HOST=""; UNINSTALL=0
+PORT=""; HOST=""; ROOTS="${DIFFY_ROOTS:-}"; LABEL="${DIFFY_MACHINE:-}"; UNINSTALL=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --port) PORT="$2"; shift 2;;
     --host) HOST="$2"; shift 2;;
+    --roots) ROOTS="$2"; shift 2;;
+    --machine) LABEL="$2"; shift 2;;
     --uninstall) UNINSTALL=1; shift;;
-    -h|--help) sed -n 2,4p "$0"; exit 0;;
+    -h|--help) sed -n 2,5p "$0"; exit 0;;
     *) echo "unknown option: $1" >&2; exit 2;;
   esac
 done
@@ -30,23 +34,29 @@ command -v git >/dev/null || { echo "git is required" >&2; exit 1; }
 mkdir -p "$CONF_DIR"; chmod 700 "$CONF_DIR"
 
 if [ ! -f "$CONF" ]; then
-  echo "No config yet at $CONF"
-  read -rp "Webhook URL: " URL
-  read -rsp "Webhook key (hidden): " KEY; echo
-  read -rp "Machine label [$(hostname)]: " LABEL
+  URL="${DIFFY_WEBHOOK_URL:-}"; KEY="${DIFFY_WEBHOOK_KEY:-}"
+  if [ -z "$URL" ] || [ -z "$KEY" ]; then
+    echo "No config yet at $CONF"
+    [ -n "$URL" ] || read -rp "Webhook URL: " URL
+    [ -n "$KEY" ] || { read -rsp "Webhook key (hidden): " KEY; echo; }
+    [ -n "$LABEL" ] || read -rp "Machine label [$(hostname)]: " LABEL || true
+  fi
+  [ -n "$URL" ] && [ -n "$KEY" ] || { echo "webhook URL and key are required" >&2; exit 1; }
   ( umask 077
     URL="$URL" KEY="$KEY" LABEL="${LABEL:-$(hostname)}" python3 -c '
 import json, os
 json.dump({"url": os.environ["URL"], "key": os.environ["KEY"], "machine": os.environ["LABEL"]}, open(os.environ["CONF"], "w"), indent=1)
 ' ) 
-  unset KEY
+  unset KEY DIFFY_WEBHOOK_KEY
 fi
-if [ -n "$PORT$HOST" ]; then
-  PORT="$PORT" HOST="$HOST" python3 -c '
+if [ -n "$PORT$HOST$ROOTS$LABEL" ]; then
+  PORT="$PORT" HOST="$HOST" ROOTS="$ROOTS" LABEL="$LABEL" python3 -c '
 import json, os
 p = os.environ["CONF"]; c = json.load(open(p))
 if os.environ["PORT"]: c["port"] = int(os.environ["PORT"])
 if os.environ["HOST"]: c["host"] = os.environ["HOST"]
+if os.environ["ROOTS"]: c["roots"] = [r.strip() for r in os.environ["ROOTS"].split(",") if r.strip()]
+if os.environ["LABEL"]: c["machine"] = os.environ["LABEL"]
 json.dump(c, open(p, "w"), indent=1)'
 fi
 chmod 600 "$CONF"

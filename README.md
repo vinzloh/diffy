@@ -19,16 +19,33 @@ endpoint that accepts JSON works.
 Needs Linux with systemd (user services), `python3` and `git`.
 
 ```sh
-git clone <this repo> ~/code/diffy
+git clone https://github.com/vinzloh/diffy ~/code/diffy   # any folder works
 cd ~/code/diffy
-./install.sh            # asks for webhook URL, key (hidden), machine label
+./install.sh --roots ~/code   # asks for webhook URL, key (hidden), machine label
 ```
 
-Options: `--port 4747` (default), `--host 0.0.0.0` (default). The installer is
+Options:
+
+- `--roots DIR[,DIR]` folders to scan for repos (default: your whole home, 4 levels deep)
+- `--machine LABEL` name sent as `machine` (default: hostname)
+- `--port 4747` (default), `--host 0.0.0.0` (default)
+
+Non-interactive install (scripts, provisioning): set the values in the
+environment instead of answering prompts. Keep the key out of shell history,
+e.g. read it from a file:
+
+```sh
+DIFFY_WEBHOOK_URL=https://example.com/webhook \
+DIFFY_WEBHOOK_KEY="$(cat /path/to/keyfile)" \
+./install.sh --machine laptop --roots ~/code
+```
+
+Flags can be passed again later to change the config (e.g. `./install.sh --port 5000`).
+The clone is where the service runs from, so don't delete or move it. The installer is
 idempotent: it writes `~/.config/systemd/user/diffy.service`, enables and
 restarts it, and links `~/.local/bin/diffy`.
 
-**Update:** `git pull && ./install.sh`
+**Update:** `git pull && ./install.sh`, then hard-refresh the page
 **Uninstall:** `./install.sh --uninstall` (keeps `~/.config/diffy/`; delete it if you want)
 
 ### CLI
