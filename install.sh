@@ -51,8 +51,6 @@ if [ -z "$ROOTS" ] && [ "$HAVE_SCOPE" = 0 ]; then
     read -rp "Folder(s) that hold your repos, comma-separated${SUG:+ [$SUG]}: " ROOTS || true
     ROOTS="${ROOTS:-$SUG}"
     [ -n "$ROOTS" ] || { echo "A repo folder is required." >&2; exit 1; }
-    read -rp "Scan $ROOTS for git repos? [y/N]: " OK || true
-    case "$OK" in y|Y|yes|YES) ;; *) echo "Aborted. Re-run with --roots DIR." >&2; exit 1;; esac
   else
     echo "error: no repo folder given. Pass --roots DIR[,DIR] or set DIFFY_ROOTS (e.g. ./install.sh --roots ~/workspace)." >&2
     echo "diffy never scans your whole home folder." >&2
@@ -70,6 +68,10 @@ if [ -n "$ROOTS" ]; then
     ABS="${ABS:+$ABS,}$(cd "$r" && pwd -P)"
   done
   ROOTS="$ABS"
+  if [ -t 0 ]; then
+    read -rp "Scan ${ROOTS//,/, } for git repos? [Y/n]: " OK || true
+    case "$OK" in ""|y|Y|yes|YES) ;; *) echo "Aborted. Re-run with --roots DIR." >&2; exit 1;; esac
+  fi
 fi
 
 if [ ! -f "$CONF" ]; then

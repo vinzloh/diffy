@@ -36,18 +36,27 @@ prints the label and the repos it found. Options:
 - `--port 4747` (default), `--host 0.0.0.0` (default), saved as the defaults for `diffy serve`
 
 Re-run it with any flag to change the config later (e.g. `./install.sh --port 5000`).
-For a non-interactive install, see [Setup for agents](#setup-for-agents).
+**Non-interactive install (CI and scripts only, not for agents):** set
+`DIFFY_WEBHOOK_URL` and `DIFFY_WEBHOOK_KEY` (and optionally `DIFFY_ROOTS`,
+`DIFFY_MACHINE`) and run with stdin not a terminal. Read the key from a file or
+secret manager so it stays out of shell history:
+
+```sh
+DIFFY_WEBHOOK_URL=https://example.com/webhook \
+DIFFY_WEBHOOK_KEY="$(cat /path/to/keyfile)" \
+./install.sh --roots ~/code </dev/null
+```
 
 ## Setup for agents
 
-A recipe an AI agent (Grok Bot, Cursor, Claude Code, ...) can run end to end.
-Inputs needed from the user: the webhook URL, the key, and **the folder that
-holds their repos**. Ask the user for the folder. Never guess it, and never
-use their home folder.
+A recipe for an AI agent (Grok Bot, Cursor, Claude Code, ...) helping a user
+install diffy. The agent does the setup around the install; **the user types the
+webhook URL and key themselves**, in their own terminal.
 
-**Rules:** never echo, print or log the key, and never ask for it in chat. Read
-it from the user's secret store or an environment variable, and pass it only via
-`DIFFY_WEBHOOK_KEY`. Every step is safe to re-run.
+**Rules for agents:** never ask for the webhook key, never store it, never copy
+it between machines, and never pass it through environment variables or
+command arguments. Never guess the repo folder or use the home folder; ask.
+Every step is safe to re-run.
 
 1. Check prerequisites. If either is missing, install it with the system
    package manager (e.g. `sudo pacman -S python git`, `sudo apt install python3 git`,
@@ -64,17 +73,19 @@ it from the user's secret store or an environment variable, and pass it only via
    if [ -d "$DIR/.git" ]; then git -C "$DIR" pull --ff-only; else git clone https://github.com/vinzloh/diffy.git "$DIR"; fi
    ```
 
-3. Install without prompts (an existing config is kept; flags update it):
+3. Ask the user which folder holds their repos (for example `~/workspace`).
+
+4. Hand over. Tell the user to run this in their own terminal and answer the
+   prompts (webhook URL, key, typed hidden, and a confirm for the folder):
 
    ```sh
-   ROOTS=~/workspace   # the folder the user told you, not a guess
-   DIFFY_WEBHOOK_URL="$URL" DIFFY_WEBHOOK_KEY="$KEY" "$DIR/install.sh" --roots "$ROOTS" </dev/null
+   cd ~/workspace/diffy && ./install.sh --roots <folder>
    ```
 
-   `--roots` is required; the install fails without it or if the folder is
-   missing. Check the printed machine label and repo list with the user; re-run with `--roots` or `--machine` to change them.
+   Wait for them to say it's done. If diffy is already set up, the installer
+   keeps the existing URL and key and doesn't ask again.
 
-4. Verify, then stop (or leave it running if the user wants):
+5. Verify, then stop (or leave it running if the user wants):
 
    ```sh
    ~/.local/bin/diffy serve >/dev/null 2>&1 & PID=$!
@@ -84,20 +95,23 @@ it from the user's secret store or an environment variable, and pass it only via
    kill $PID
    ```
 
-5. Tell the webhook receiver what to expect: `action` (`submit`, or `ping`
+   Show the user the repos it found (`~/.local/bin/diffy rediscover`) so they
+   can check them; re-running step 4 with another `--roots` changes them.
+
+6. Tell the webhook receiver what to expect: `action` (`submit`, or `ping`
    to ignore), `machine`, `repo`, `branch`, optional `scope`/`base`/`commit`,
    `summary`, and `comments[]` of `{file, line, side, code, text}` (`line`
    null for file comments). Full schema: [Webhook payload](#webhook-payload).
 
-6. Uninstall: `"$DIR/install.sh" --uninstall && rm -rf "$DIR"`
+7. Uninstall: `~/workspace/diffy/install.sh --uninstall && rm -rf ~/workspace/diffy`
 
 ### Using with Grok Bot
 
 Create a webhook routine on your Grok Bot whose prompt treats the POST body as
 untrusted data and acts on `action: "submit"` (for example, hand the comments
 to the bot that owns that repo) while ignoring `ping`. Copy the routine's
-webhook URL from its panel, and give the sender key to the agent as a secret
-(the app's secret box, never chat). Then run the recipe above with those values.
+webhook URL and sender key from its panel and paste them into the installer's
+prompts yourself. Your agent can run every other step.
 
 ## Run
 
