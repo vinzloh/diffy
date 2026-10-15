@@ -33,7 +33,8 @@ prints the label and the repos it found. Options:
 
 - `--roots DIR[,DIR]` **required**: folders to scan for repos, 4 levels deep (or set `DIFFY_ROOTS`)
 - `--machine LABEL` name sent as `machine` (default: `hostname -s`)
-- `--port 4747` (default), `--host 0.0.0.0` (default), saved as the defaults for `diffy serve`
+- `--port 4747` (default) and `--host 127.0.0.1` (default, this machine only), saved as the defaults for `diffy serve`.
+  Use `--host 0.0.0.0` to reach it from other devices, see [Security](#security).
 
 Re-run it with any flag to change the config later (e.g. `./install.sh --port 5000`).
 **Non-interactive install (CI and scripts only, not for agents):** set
@@ -119,9 +120,14 @@ diffy runs on demand in the foreground. Start it in a terminal, tmux or Herdr
 pane, open the URL it prints, and press Ctrl+C when you're done:
 
 ```sh
-diffy serve                      # http://0.0.0.0:4747
-diffy serve --host 127.0.0.1 --port 5000
+diffy serve                      # http://localhost:4747/ (this machine only)
+diffy serve --port 5000
+diffy serve --host 0.0.0.0       # also reachable from other devices, e.g. over Tailscale
 ```
+
+With `--host 0.0.0.0` the startup lines also print the machine's Tailscale
+and LAN addresses when they can be detected. Read the no-auth warning in
+[Security](#security) first.
 
 Other commands:
 
@@ -147,7 +153,7 @@ link, and any systemd service from older versions), then delete the clone.
   "depth": 4,
   "repos": ["~/code/app", "~/work/api"],
   "port": 4747,
-  "host": "0.0.0.0"
+  "host": "127.0.0.1"
 }
 ```
 
@@ -192,11 +198,11 @@ and the error is shown in the page.
   commits, checks out or writes to your repos.
 - The webhook key stays in the config file on the server side. It is never
   sent to the browser or logged.
-- There is **no authentication** on the page. By default it binds `0.0.0.0`
-  so other devices (e.g. on your Tailscale tailnet) can reach it. Anyone who
-  can reach the port can read your diffs and submit reviews. Use
-  `--host 127.0.0.1`, a firewall, or keep the port to a private network such
-  as Tailscale.
+- There is **no authentication** on the page. By default diffy binds
+  `127.0.0.1`, so only this machine can open it. With `--host 0.0.0.0` anyone
+  who can reach the port can read your diffs and submit reviews to your
+  webhook, so only do that on a private network such as a Tailscale tailnet,
+  or behind a firewall.
 
 ## License
 

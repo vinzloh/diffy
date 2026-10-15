@@ -2,7 +2,7 @@
 """diffy: a local, read-only git diff reviewer that posts line comments to a webhook.
 
 Usage:
-  diffy serve [--host 0.0.0.0] [--port 4747]
+  diffy serve [--host 127.0.0.1] [--port 4747]
   diffy rediscover      re-scan repo roots and print the repos found
   diffy ping            POST {"action":"ping"} to the webhook once
 """
@@ -190,10 +190,24 @@ class H(BaseHTTPRequestHandler):
         self.send(200 if status else 502, json.dumps({"ok": bool(status), "status": status, "error": err}))
 
 
+def other_ips():
+    out = []
+    try:
+        r = subprocess.run(["tailscale", "ip", "-4"], capture_output=True, text=True, timeout=2)
+        ts = r.stdout.split()[0] if r.returncode == 0 and r.stdout.split() else ""
+        if ts: out.append(("tailscale", ts))
+    except Exception: ts = ""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("192.0.2.1", 9)); lan = s.getsockname()[0]; s.close()
+        if lan and lan != ts and not lan.startswith("127."): out.append(("lan", lan))
+    except Exception: pass
+    return out
+
 def main():
     ap = argparse.ArgumentParser(prog="diffy", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", nargs="?", default="serve", choices=["serve", "ping", "rediscover"])
-    ap.add_argument("--host", default=None, help="bind address (default 0.0.0.0, or config host)")
+    ap.add_argument("--host", default=None, help="bind address (default 127.0.0.1, or config host); 0.0.0.0 to allow other devices")
     ap.add_argument("--port", type=int, default=None, help="port (default 4747, or config port)")
     a = ap.parse_args()
     if a.cmd in ("rediscover", "serve") and not has_scope():
@@ -206,10 +220,16 @@ def main():
         s, e = post_webhook({"action": "ping", "machine": machine()}); print("ping:", s or e); sys.exit(0 if s == 200 else 1)
     try: c = config()
     except Exception: c = {}
-    host = a.host or c.get("host") or "0.0.0.0"; port = a.port or int(c.get("port", 4747))
+    host = a.host or c.get("host") or "127.0.0.1"; port = a.port or int(c.get("port", 4747))
     if has_scope(): discover()
-    print(f"diffy on http://{host}:{port}", flush=True)
-    ThreadingHTTPServer((host, port), H).serve_forever()
+    print(f"diffy on http://localhost:{port}/", flush=True)
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        for label, ip in other_ips():
+            print(f"  {label}: http://{ip}:{port}/", flush=True)
+        print("  warning: no authentication; anyone who can reach this port can read your diffs", flush=True)
+    print("Ctrl+C to stop", flush=True)
+    try: ThreadingHTTPServer((host, port), H).serve_forever()
+    except KeyboardInterrupt: pass
 
 if __name__ == "__main__":
     main()
