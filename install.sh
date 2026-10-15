@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# diffy installer: idempotent. Re-run any time (e.g. after `git pull`).
+# diffy installer: sets up ~/.config/diffy/config.json and the ~/.local/bin/diffy
+# command. Idempotent; re-run any time. Run the reviewer with `diffy serve`.
 #   ./install.sh [--port N] [--host ADDR] [--roots DIR[,DIR]] [--machine LABEL] [--uninstall]
 # Non-interactive first install: set DIFFY_WEBHOOK_URL and DIFFY_WEBHOOK_KEY
 # (optional DIFFY_MACHINE, DIFFY_ROOTS) in the environment.
@@ -7,7 +8,6 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONF_DIR="${DIFFY_CONFIG_DIR:-$HOME/.config/diffy}"
 export CONF="$CONF_DIR/config.json"
-UNIT="$HOME/.config/systemd/user/diffy.service"
 BIN="$HOME/.local/bin/diffy"
 PORT=""; HOST=""; ROOTS="${DIFFY_ROOTS:-}"; LABEL="${DIFFY_MACHINE:-}"; UNINSTALL=0
 while [ $# -gt 0 ]; do
@@ -23,9 +23,15 @@ while [ $# -gt 0 ]; do
 done
 
 if [ "$UNINSTALL" = 1 ]; then
-  systemctl --user disable --now diffy.service 2>/dev/null || true
-  rm -f "$UNIT" "$BIN"; systemctl --user daemon-reload
-  echo "diffy service removed. Config kept at $CONF (delete it yourself if you want)."
+  rm -f "$BIN"
+  # clean up the systemd service that older versions installed
+  if [ -f "$HOME/.config/systemd/user/diffy.service" ]; then
+    systemctl --user disable --now diffy.service 2>/dev/null || true
+    rm -f "$HOME/.config/systemd/user/diffy.service"
+    systemctl --user daemon-reload 2>/dev/null || true
+  fi
+  rm -rf "$CONF_DIR"
+  echo "diffy uninstalled (removed $BIN and $CONF_DIR). You can delete this clone."
   exit 0
 fi
 
@@ -62,24 +68,13 @@ fi
 chmod 600 "$CONF"
 
 chmod +x "$DIR/diffy"
-mkdir -p "$(dirname "$BIN")" "$(dirname "$UNIT")"
+mkdir -p "$(dirname "$BIN")"
 ln -sf "$DIR/diffy" "$BIN"
-cat > "$UNIT" <<UNITEOF
-[Unit]
-Description=diffy local git diff reviewer
-After=network-online.target
-
-[Service]
-ExecStart=/usr/bin/env python3 $DIR/diffy serve
-Restart=on-failure
-
-[Install]
-WantedBy=default.target
-UNITEOF
-systemctl --user daemon-reload
-systemctl --user enable diffy.service >/dev/null 2>&1
-systemctl --user restart diffy.service
-"$DIR/diffy" rediscover
-P=$(python3 -c 'import json,os;print(json.load(open(os.environ["CONF"])).get("port",4747))')
-echo "diffy installed: http://localhost:$P  (service: diffy.service, CLI: $BIN)"
-echo "Tip: to keep it running while logged out: sudo loginctl enable-linger $USER"
+# older versions ran diffy as a systemd user service; stop it so the port is free
+if [ -f "$HOME/.config/systemd/user/diffy.service" ]; then
+  systemctl --user disable --now diffy.service 2>/dev/null || true
+  rm -f "$HOME/.config/systemd/user/diffy.service"; systemctl --user daemon-reload 2>/dev/null || true
+fi
+"$BIN" rediscover
+echo "diffy is set up. Start it with:  diffy serve   (Ctrl+C to stop)"
+case ":$PATH:" in *":$(dirname "$BIN"):"*) ;; *) echo "Note: $(dirname "$BIN") is not on your PATH; add it, or run $BIN";; esac

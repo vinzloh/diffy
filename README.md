@@ -16,19 +16,22 @@ endpoint that accepts JSON works.
 
 ## Install
 
-Needs Linux with systemd (user services), `python3` and `git`.
+Needs `python3` and `git`. Works on Linux and macOS.
 
 ```sh
-git clone https://github.com/vinzloh/diffy ~/code/diffy   # any folder works
+gh repo clone vinzloh/diffy ~/code/diffy    # or: git clone git@github.com:vinzloh/diffy.git ~/code/diffy
 cd ~/code/diffy
 ./install.sh --roots ~/code   # asks for webhook URL, key (hidden), machine label
 ```
 
-Options:
+The installer only writes `~/.config/diffy/config.json` (mode 600) and links
+`~/.local/bin/diffy` to the clone, so keep the clone where it is. Options:
 
 - `--roots DIR[,DIR]` folders to scan for repos (default: your whole home, 4 levels deep)
 - `--machine LABEL` name sent as `machine` (default: hostname)
-- `--port 4747` (default), `--host 0.0.0.0` (default)
+- `--port 4747` (default), `--host 0.0.0.0` (default), saved as the defaults for `diffy serve`
+
+Re-run it with any flag to change the config later (e.g. `./install.sh --port 5000`).
 
 Non-interactive install (scripts, provisioning): set the values in the
 environment instead of answering prompts. Keep the key out of shell history,
@@ -40,21 +43,26 @@ DIFFY_WEBHOOK_KEY="$(cat /path/to/keyfile)" \
 ./install.sh --machine laptop --roots ~/code
 ```
 
-Flags can be passed again later to change the config (e.g. `./install.sh --port 5000`).
-The clone is where the service runs from, so don't delete or move it. The installer is
-idempotent: it writes `~/.config/systemd/user/diffy.service`, enables and
-restarts it, and links `~/.local/bin/diffy`.
+## Run
 
-**Update:** `git pull && ./install.sh`, then hard-refresh the page
-**Uninstall:** `./install.sh --uninstall` (keeps `~/.config/diffy/`; delete it if you want)
-
-### CLI
+diffy runs on demand in the foreground. Start it in a terminal, tmux or Herdr
+pane, open the URL it prints, and press Ctrl+C when you're done:
 
 ```sh
-diffy serve [--host H] [--port N]   # what the service runs
-diffy rediscover                    # re-scan for repos and print them
-diffy ping                          # send {"action":"ping"} to the webhook once
+diffy serve                      # http://0.0.0.0:4747
+diffy serve --host 127.0.0.1 --port 5000
 ```
+
+Other commands:
+
+```sh
+diffy rediscover    # re-scan for repos and print them (also runs at every start)
+diffy ping          # send {"action":"ping"} to the webhook once
+```
+
+**Update:** `git pull` in the clone, restart `diffy serve`, hard-refresh the page.
+**Uninstall:** `./install.sh --uninstall` (removes the config and the `diffy`
+link, and any systemd service from older versions), then delete the clone.
 
 ## Config
 
