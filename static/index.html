@@ -1,0 +1,206 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Code Review</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/vendor/github-dark.min.css">
+<style>
+:root{--bg:#0d1117;--bg2:#11161d;--bg3:#161b22;--fg:#d1d7e0;--mut:#8b949e;--bd:#262c36;--add:rgba(46,160,67,.13);--addg:#2ea043;--del:rgba(248,81,73,.13);--delg:#f85149;--hl:#2f6feb;--sel:#1d2a44}
+*{box-sizing:border-box}[hidden]{display:none!important}*{scrollbar-width:thin;scrollbar-color:var(--bd) transparent}#pane,table.df{scrollbar-color:transparent transparent}#pane:hover,table.df:hover{scrollbar-color:var(--bd) transparent}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:13px Inter,system-ui,sans-serif}
+#app{display:flex;height:100vh}
+#side{width:300px;min-width:200px;border-right:1px solid var(--bd);display:flex;flex-direction:column;background:var(--bg2);resize:horizontal;overflow:hidden}
+#side.hide{display:none}
+.tabs{display:flex;margin:6px;background:var(--bg);border-radius:6px;padding:2px}.tabs div{flex:1;text-align:center;padding:4px;border-radius:5px;cursor:pointer;color:var(--mut)}.tabs div.on{background:var(--bg3);color:var(--fg)}
+select{width:100%;background:var(--bg3);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:6px 8px;font:inherit}
+.row{padding:0 6px 6px}.cmp{display:flex;align-items:center;gap:6px;padding:0 6px 6px;font-size:11px;color:var(--mut)}.cmp select{flex:1}
+.allf{display:flex;justify-content:space-between;align-items:center;margin:0 6px 4px;padding:6px 8px;border-radius:6px;background:var(--sel);cursor:pointer}
+.tools{display:flex;align-items:center;gap:6px;padding:4px 10px;color:var(--mut)}.tools .sp{flex:1}.ib{cursor:pointer;padding:2px 4px;border-radius:4px;user-select:none}.ib:hover{background:var(--bg3);color:var(--fg)}
+#q{display:none;margin:0 6px 4px;width:calc(100% - 12px);background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:4px 8px}
+#list{flex:1;overflow:auto;padding-bottom:20px}
+.tn{display:flex;align-items:center;gap:6px;padding:3px 8px;cursor:pointer;white-space:nowrap}.tn:hover{background:var(--bg3)}.tn.cur{background:var(--sel)}
+.tn .nm{flex:1;overflow:hidden;text-overflow:ellipsis}.cnt{font:11px ui-monospace,monospace}.a{color:var(--addg)}.d{color:var(--delg)}
+.st{font:10px ui-monospace,monospace;color:var(--mut);width:10px}.st.A{color:var(--addg)}.st.D{color:var(--delg)}.st.M{color:#d29922}
+.vc{width:12px;height:12px;border:1.5px solid var(--mut);border-radius:50%;flex:none}.vc.on{background:var(--addg);border-color:var(--addg)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--addg);flex:none}.dot.v{visibility:hidden}
+.car{width:10px;color:var(--mut);font-size:10px}
+.cm-item{padding:6px 10px;cursor:pointer;border-bottom:1px solid transparent}.cm-item:hover{background:var(--bg3)}.cm-item.cur{background:var(--sel)}
+.cm-item .s1{display:flex;justify-content:space-between;gap:6px}.cm-item .s1 span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-item .s2{display:flex;justify-content:space-between;color:var(--mut);font-size:11px;margin-top:3px}.av{display:inline-flex;width:14px;height:14px;border-radius:50%;background:#6e40c9;color:#fff;font-size:9px;align-items:center;justify-content:center;margin-right:5px}
+.divd{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:11px;padding:10px}.divd:before,.divd:after{content:"";flex:1;border-top:1px solid var(--bd)}
+.sha{font:11px ui-monospace,monospace;color:var(--mut)}
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#top{display:flex;align-items:center;border-bottom:1px solid var(--bd);padding:4px 8px;gap:8px;background:var(--bg2)}
+.ftab{padding:5px 12px;background:var(--bg3);border-radius:6px 6px 0 0}#top .sp{flex:1}
+.seg{display:flex;background:var(--bg);border-radius:6px;padding:2px}.seg div{padding:3px 10px;border-radius:5px;cursor:pointer;color:var(--mut)}.seg div.on{background:var(--bg3);color:var(--fg)}
+
+#pane{flex:1;overflow:auto}
+#chead{padding:14px 18px;border-bottom:1px solid var(--bd)}#chead h2{margin:0 0 8px;font-size:15px}#chead .meta{color:var(--mut);display:flex;align-items:center;gap:8px}#chead pre{white-space:pre-wrap;font:13px/1.6 inherit;margin:12px 0 0;color:var(--fg)}
+.file{border-bottom:1px solid var(--bd)}
+.fh{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--bg2);border-bottom:1px solid var(--bd)}
+.fh .p{font:13px ui-monospace,monospace;cursor:pointer}.fh .p b{color:var(--fg)}.fh .p i{font-style:normal;color:var(--mut)}.fh .sp{flex:1}
+.btn{display:inline-flex;align-items:center;gap:5px;color:var(--mut);cursor:pointer;padding:3px 8px;border-radius:5px}.btn:hover{background:var(--bg3);color:var(--fg)}
+.file.c .body{display:none}.file.c .fh .car{transform:rotate(-90deg)}
+table.df{border-collapse:collapse;width:100%;font:12.5px/1.55 "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;table-layout:fixed}
+table.df td{padding:0 10px;white-space:pre-wrap;word-break:break-all;vertical-align:top}
+td.n{width:52px;color:#5d6673;text-align:right;user-select:none;cursor:pointer;padding-right:8px!important;border-right:3px solid transparent}
+td.n:hover{color:var(--fg)}tr .n.ad{border-right-color:var(--addg)}tr .n.dl{border-right-color:var(--delg)}
+td.ad{background:var(--add)}td.dl{background:var(--del)}td.emp{background:#0b0e13}
+tr.hk td{background:#0f1a2b;color:var(--mut);padding:3px 10px}
+tr.cmt td{background:var(--bg3);white-space:normal;padding:8px 12px;font:13px Inter,system-ui,sans-serif}
+.fcm{padding:8px 14px;background:var(--bg3);border-bottom:1px solid var(--bd)}
+textarea{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:6px 8px;font:13px inherit}
+button{background:#238636;color:#fff;border:0;border-radius:6px;padding:5px 12px;cursor:pointer;margin:6px 6px 0 0;font:inherit}button.g{background:#30363d}
+.bub{border-left:3px solid var(--hl);padding:2px 10px;white-space:pre-wrap}
+#foot{border-top:1px solid var(--bd);padding:8px 12px;display:flex;gap:10px;align-items:flex-end;background:var(--bg2)}#foot textarea{flex:1;height:34px}#msg{color:var(--mut);white-space:nowrap}
+#foot button{margin:0}
+.empty{padding:40px;color:var(--mut);text-align:center}
+.hljs{background:transparent!important;padding:0!important}
+</style></head><body><div id="app">
+<aside id="side">
+ <div class="tabs"><div data-t="tree" class="on">Tree</div><div data-t="status">Git status</div><div data-t="commits">Commits</div></div>
+ <div class="row"><select id="repos"></select></div>
+ <div id="treeHead">
+  <div class="row"><select id="scope">
+   <option value="all">All changes since base</option><option value="uncommitted">Uncommitted changes</option>
+   <option value="staged">Staged changes</option><option value="unstaged">Unstaged changes</option><option value="last">Last commit</option></select></div>
+  <div class="cmp">COMPARE AGAINST <select id="base"></select></div>
+  <div class="allf" id="allf"><span>📂 All files</span><span class="cnt"><span class="a" id="ta"></span> <span class="d" id="td"></span></span></div>
+  <div class="tools"><span title="Viewed">👁</span><span id="vcount">0/0</span><span class="sp"></span><span class="ib" id="srch" title="Search">⌕</span><span class="ib" id="colall" title="Collapse folders">⇊</span><span class="ib" id="filt" title="Hide viewed">⚲</span></div>
+  <input id="q" placeholder="Filter files…">
+ </div>
+ <div id="commitHead" class="tools" hidden><span class="sp"></span><span id="ccount"></span></div>
+ <div id="list"></div>
+</aside>
+<section id="main">
+ <div id="top"><span class="ib" id="tog" title="Toggle sidebar">◧</span><span class="ftab">All files</span><span class="sp"></span><span id="m" class="sha"></span>
+  <span class="ib" id="colf" title="Collapse/expand all files">⇕</span><div class="seg" id="mode"><div data-m="split">Split</div><div data-m="unified">Unified</div></div>
+  <span class="ib" id="wrapb" title="Settings: toggle word wrap">⚙</span></div>
+ <div id="pane"><div class="empty">Loading…</div></div>
+ <div id="foot"><textarea id="sum" placeholder="Overall summary (optional)"></textarea><span id="msg"></span><button id="sub">Submit review</button></div>
+</section></div>
+<script src="/vendor/highlight.min.js"></script>
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const S={repo:null,tab:'tree',scope:'all',base:'',commit:null,files:[],comments:[],seq:0,mode:localStorage.dr_mode||'split',hideViewed:false,collapsedDirs:new Set(),q:''};
+const api=async(p,o)=>(await fetch(p,o)).json();
+const qs=o=>Object.entries(o).filter(([k,v])=>v!=null&&v!=='').map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+const vkey=()=>'dr_viewed:'+S.repo+':'+(S.scope=='commit'?S.commit:S.scope+':'+S.base);
+const viewed=()=>{try{return new Set(JSON.parse(localStorage[vkey()]||'[]'))}catch{return new Set()}};
+const setViewed=(f,on)=>{const v=viewed();on?v.add(f):v.delete(f);localStorage[vkey()]=JSON.stringify([...v]);};
+function ago(ts){const s=Date.now()/1e3-ts;for(const[u,n]of[['y',31536e3],['mo',2592e3],['d',86400],['h',3600],['m',60]])if(s>=n)return Math.floor(s/n)+u;return 'now'}
+const LANG={ts:'typescript',tsx:'typescript',js:'javascript',jsx:'javascript',mjs:'javascript',cjs:'javascript',py:'python',rb:'ruby',go:'go',rs:'rust',json:'json',css:'css',scss:'scss',html:'xml',xml:'xml',svg:'xml',md:'markdown',yml:'yaml',yaml:'yaml',sh:'bash',bash:'bash',sql:'sql',java:'java',kt:'kotlin',php:'php',toml:'ini',ini:'ini',graphql:'graphql',gql:'graphql',liquid:'xml',c:'c',h:'c',cpp:'cpp',swift:'swift',dockerfile:'dockerfile'};
+function hl(code,lang){if(!lang||!window.hljs||!hljs.getLanguage(lang))return esc(code);try{return hljs.highlight(code,{language:lang,ignoreIllegals:true}).value}catch{return esc(code)}}
+
+function parse(d){const out=[];for(const f of d.split(/^(?=diff --git )/m)){if(!f.startsWith('diff --git'))continue;
+ const L=f.split('\n');const m=f.match(/^diff --git [a-z]\/(.*?) [a-z]\/(.*)$/m)||[];let path=m[2]||'?',old=m[1];
+ let st='M';if(/^new file mode/m.test(f))st='A';else if(/^deleted file mode/m.test(f)){st='D'}else if(/^rename from/m.test(f))st='R';
+ const pp=f.match(/^\+\+\+ [a-z]\/(.*)$/m);if(pp)path=pp[1];else if(st=='D')path=old;
+ const hunks=[];let h=null,o=0,n=0,add=0,del=0,binary=/^Binary files/m.test(f);
+ for(const l of L){if(l.startsWith('@@')){const x=l.match(/-(\d+)(?:,\d+)? \+(\d+)/);o=+x[1];n=+x[2];h={head:l,lines:[]};hunks.push(h);continue}
+  if(!h||l.startsWith('\\'))continue;const t=l[0],c=l.slice(1);if(t===undefined)continue;
+  if(t=='+'){h.lines.push({t:'+',n:n++,c});add++}else if(t=='-'){h.lines.push({t:'-',o:o++,c});del++}else if(t==' '){h.lines.push({t:' ',o:o++,n:n++,c})}}
+ const ext=path.split('/').pop().toLowerCase();out.push({path,st,hunks,add,del,binary,lang:LANG[ext.includes('.')?ext.split('.').pop():ext]});}
+ return out}
+
+async function loadRepos(){const r=await api('/api/repos');$('#m').textContent='@ '+r.machine;
+ $('#repos').innerHTML=r.repos.map(x=>`<option value="${esc(x.name)}">${esc(x.name)} · ${esc(x.branch)} · ${x.dirty} dirty</option>`).join('');
+ const want=localStorage.dr_repo;S.repo=r.repos.some(x=>x.name==want)?want:(r.repos[0]||{}).name;$('#repos').value=S.repo;await loadRepo();}
+async function loadRepo(){if(!S.repo)return;localStorage.dr_repo=S.repo;const b=await api('/api/branches?'+qs({repo:S.repo}));
+ S.base=b.default;$('#base').innerHTML=b.refs.map(r=>`<option${r==S.base?' selected':''}>${esc(r)}</option>`).join('');S.commit=null;await loadDiff();}
+function guard(){return !S.comments.length||confirm('Discard '+S.comments.length+' unsent comment(s)?')}
+async function loadDiff(){S.comments=[];upd();$('#pane').innerHTML='<div class="empty">Loading…</div>';
+ const p={repo:S.repo,scope:S.commit?'commit':S.scope,base:S.base,commit:S.commit};const r=await api('/api/diff?'+qs(p));
+ S.files=parse(r.diff||'');S.cmeta=r.commit;renderSide();renderPane();}
+
+// ---------- sidebar
+function tree(files){const root={d:{},f:[],add:0,del:0};for(const f of files){let n=root;n.add+=f.add;n.del+=f.del;const parts=f.path.split('/');
+ for(const p of parts.slice(0,-1)){n=n.d[p]=n.d[p]||{d:{},f:[],add:0,del:0};n.add+=f.add;n.del+=f.del}n.f.push(f)}return root}
+function cnt(a,d){return `<span class="cnt">${a?`<span class="a">+${a}</span>`:''} ${d?`<span class="d">-${d}</span>`:''}</span>`}
+function renderSide(){const v=viewed();
+ $('#treeHead').hidden=S.tab=='commits';$('#commitHead').hidden=S.tab!='commits';
+ const files=S.files.filter(f=>(!S.q||f.path.toLowerCase().includes(S.q))&&!(S.hideViewed&&v.has(f.path)));
+ $('#ta').textContent='+'+S.files.reduce((a,f)=>a+f.add,0);$('#td').textContent='-'+S.files.reduce((a,f)=>a+f.del,0);
+ $('#vcount').textContent=S.files.filter(f=>v.has(f.path)).length+'/'+S.files.length;
+ if(S.tab=='commits')return renderCommits();
+ if(S.tab=='status')return renderStatus();
+ let h='';const walk=(n,path,dep)=>{for(const k of Object.keys(n.d).sort()){let c=n.d[k],name=k,p=path+k;
+   while(!c.f.length&&Object.keys(c.d).length==1){const k2=Object.keys(c.d)[0];name+='/'+k2;p+='/'+k2;c=c.d[k2]}
+   const col=S.collapsedDirs.has(p);h+=`<div class="tn" data-dir="${esc(p)}" style="padding-left:${8+dep*14}px"><span class="car">${col?'›':'⌄'}</span><span class="nm">${esc(name)}</span>${cnt(c.add,c.del)}</div>`;
+   if(!col)walk(c,p+'/',dep+1)}
+  for(const f of n.f.sort((a,b)=>a.path.localeCompare(b.path)))h+=fileRow(f,f.path.split('/').pop(),dep,v)};
+ walk(tree(files),'',0);$('#list').innerHTML=h||'<div class="empty">No changes</div>';bindSide();}
+function fileRow(f,name,dep,v){return `<div class="tn" data-f="${esc(f.path)}" style="padding-left:${8+dep*14}px"><span class="vc${v.has(f.path)?' on':''}" data-vc="${esc(f.path)}"></span><span class="dot${v.has(f.path)?' v':''}"></span><span class="st ${f.st}">${f.st}</span><span class="nm">${esc(name)}</span>${cnt(f.add,f.del)}</div>`}
+async function renderStatus(){const r=await api('/api/status?'+qs({repo:S.repo}));const v=viewed();const g={Staged:[],Unstaged:[],Untracked:[]};
+ for(const x of r){if(x.x=='?'){g.Untracked.push(x);continue}if(x.x!=' ')g.Staged.push(x);if(x.y!=' ')g.Unstaged.push(x)}
+ let h='';for(const[k,a]of Object.entries(g))if(a.length){h+=`<div class="divd">${k} (${a.length})</div>`;for(const x of a){const st=k=='Untracked'?'A':(k=='Staged'?x.x:x.y);
+  h+=`<div class="tn" data-f="${esc(x.file.split(' -> ').pop())}"><span class="st ${st}">${st}</span><span class="nm">${esc(x.file)}</span></div>`}}
+ $('#list').innerHTML=h||'<div class="empty">Working tree clean</div>';bindSide();}
+async function renderCommits(){const r=await api('/api/commits?'+qs({repo:S.repo,base:S.base}));$('#ccount').textContent=(r.branch.length+r.base.length)+' commits';
+ const it=c=>`<div class="cm-item${S.commit==c.sha?' cur':''}" data-c="${c.sha}"><div class="s1"><span>${esc(c.subject)}</span><span class="sha">${ago(c.ts)}</span></div><div class="s2"><span><span class="av">${esc((c.author[0]||'?').toUpperCase())}</span>${esc(c.author)}</span><span class="sha">${c.sha.slice(0,8)}</span></div></div>`;
+ $('#list').innerHTML=r.branch.map(it).join('')+`<div class="divd">In ${esc(r.baseName)}</div>`+r.base.map(it).join('');
+ $$('.cm-item').forEach(e=>e.onclick=async()=>{if(!guard())return;S.commit=e.dataset.c;await loadDiff()});}
+function bindSide(){$$('#list .tn[data-dir]').forEach(e=>e.onclick=()=>{const p=e.dataset.dir;S.collapsedDirs.has(p)?S.collapsedDirs.delete(p):S.collapsedDirs.add(p);renderSide()});
+ $$('#list .tn[data-f]').forEach(e=>e.onclick=ev=>{if(ev.target.dataset.vc!=null){toggleViewed(ev.target.dataset.vc);return}
+  $$('.tn.cur').forEach(x=>x.classList.remove('cur'));e.classList.add('cur');const el=document.getElementById('f:'+e.dataset.f);if(el){el.classList.remove('c');el.scrollIntoView({block:'start'})}});}
+function toggleViewed(p){const on=!viewed().has(p);setViewed(p,on);const el=document.getElementById('f:'+p);if(el){el.classList.toggle('c',on);el.querySelector('.vw').textContent=(on?'● ':'○ ')+'Viewed'}renderSide()}
+
+// ---------- main pane
+function renderPane(){let h='';const v=viewed();
+ if(S.cmeta){const c=S.cmeta;h+=`<div id="chead"><h2>${esc(c.subject)}</h2><div class="meta"><span class="av">${esc((c.author[0]||'?').toUpperCase())}</span>${esc(c.author)}<span class="sha">${c.sha.slice(0,8)}</span><span>${ago(c.ts)}</span><span class="sp"></span><span class="btn" id="backc">✕ Back to ${esc($('#scope').selectedOptions[0].text)}</span></div>${c.body?`<pre>${esc(c.body)}</pre>`:''}</div>`}
+ if(!S.files.length)h+='<div class="empty">No changes in this scope.</div>';
+ S.files.forEach((f,i)=>{const dir=f.path.includes('/')?f.path.slice(0,f.path.lastIndexOf('/')+1):'',base=f.path.slice(dir.length),vw=v.has(f.path);
+  h+=`<div class="file${vw?' c':''}" id="f:${esc(f.path)}" data-i="${i}"><div class="fh"><span class="car">⌄</span><span class="p"><i>${esc(dir)}</i><b>${esc(base)}</b></span>${cnt(f.add,f.del)}<span class="st ${f.st}">${f.st}</span><span class="sp"></span>
+  <span class="btn vw">${vw?'●':'○'} Viewed</span><span class="btn fc">💬 Comment</span></div><div class="fcms"></div><div class="body">${f.binary?'<div class="empty">Binary file</div>':(S.mode=='split'?split(f):unified(f))}</div></div>`});
+ $('#pane').innerHTML=h;bindPane();restoreComments();}
+function ln(cls,num,side,line){return `<td class="n ${cls}" data-side="${side}" data-line="${num}">${num??''}</td>`}
+function unified(f){let h='<table class="df"><colgroup><col style="width:52px"><col style="width:52px"><col></colgroup>';for(const k of f.hunks){h+=`<tr class="hk"><td colspan="3">${esc(k.head)}</td></tr>`;
+ for(const l of k.lines){const c=l.t=='+'?'ad':l.t=='-'?'dl':'';const side=l.t=='-'?'old':'new',num=l.t=='-'?l.o:l.n;
+  h+=`<tr data-side="${side}" data-line="${num}"><td class="n ${c}">${l.o??''}</td><td class="n ${c}">${l.n??''}</td><td class="${c}">${hl(l.c,f.lang)||' '}</td></tr>`}}return h+'</table>'}
+function split(f){let h='<table class="df"><colgroup><col style="width:52px"><col><col style="width:52px"><col></colgroup>';for(const k of f.hunks){h+=`<tr class="hk"><td colspan="4">${esc(k.head)}</td></tr>`;
+ const L=k.lines;for(let i=0;i<L.length;){if(L[i].t==' '){const l=L[i++];h+=`<tr data-side="new" data-line="${l.n}"><td class="n">${l.o}</td><td>${hl(l.c,f.lang)||' '}</td><td class="n">${l.n}</td><td>${hl(l.c,f.lang)||' '}</td></tr>`;continue}
+  const d=[],a=[];while(i<L.length&&L[i].t=='-')d.push(L[i++]);while(i<L.length&&L[i].t=='+')a.push(L[i++]);
+  for(let j=0;j<Math.max(d.length,a.length);j++){const x=d[j],y=a[j];const side=y?'new':'old',num=y?y.n:x.o;
+   h+=`<tr data-side="${side}" data-line="${num}">`+(x?`<td class="n dl" data-s="old" data-l="${x.o}">${x.o}</td><td class="dl">${hl(x.c,f.lang)||' '}</td>`:'<td class="n emp"></td><td class="emp"></td>')+(y?`<td class="n ad" data-s="new" data-l="${y.n}">${y.n}</td><td class="ad">${hl(y.c,f.lang)||' '}</td>`:'<td class="n emp"></td><td class="emp"></td>')+'</tr>'}}}return h+'</table>'}
+function bindPane(){const b=$('#backc');if(b)b.onclick=async()=>{if(!guard())return;S.commit=null;await loadDiff()};
+ $$('.file').forEach(el=>{const f=S.files[+el.dataset.i];el.querySelector('.p').onclick=el.querySelector('.car').onclick=()=>el.classList.toggle('c');
+  el.querySelector('.vw').onclick=()=>toggleViewed(f.path);el.querySelector('.fc').onclick=()=>{el.classList.remove('c');editor(el.querySelector('.fcms'),null,{file:f.path,line:null,side:null,code:null},true)};
+  el.querySelectorAll('tr[data-line]').forEach(tr=>tr.onclick=ev=>{const td=ev.target.closest('td');let side=tr.dataset.side,line=+tr.dataset.line;
+   if(td&&td.dataset.s){side=td.dataset.s;line=+td.dataset.l}else if(S.mode=='split'&&td){const idx=[...tr.children].indexOf(td);const o=tr.children[idx<2?0:2];if(o.dataset.s){side=o.dataset.s;line=+o.dataset.l}}
+   if(tr.nextSibling&&tr.nextSibling.classList&&tr.nextSibling.classList.contains('cmt')&&tr.nextSibling.querySelector('textarea'))return;
+   const code=codeAt(f,side,line);editor(tr,null,{file:f.path,line,side,code},false)})})}
+function codeAt(f,side,line){for(const k of f.hunks)for(const l of k.lines)if((side=='old'?l.o:l.n)===line&&(side=='old'?l.t!='+':l.t!='-'))return (l.t)+l.c;return ''}
+function editor(anchor,cm,base,fileLevel){const cols=S.mode=='split'?4:3;const box=document.createElement(fileLevel?'div':'tr');box.className=fileLevel?'fcm':'cmt';
+ const inner=`<textarea rows="3" placeholder="${fileLevel?'Comment on this file…':'Comment on line '+base.line+'…'}">${cm?esc(cm.text):''}</textarea><button class="ok">Save</button><button class="g x">Cancel</button>`;
+ box.innerHTML=fileLevel?inner:`<td colspan="${cols}">${inner}</td>`;
+ if(cm)cm.el.replaceWith(box);else if(fileLevel)anchor.appendChild(box);else anchor.after(box);const ta=box.querySelector('textarea');ta.focus();
+ ta.onkeydown=e=>{if(e.key=='Enter'&&(e.metaKey||e.ctrlKey))box.querySelector('.ok').click();if(e.key=='Escape')box.querySelector('.x').click()};
+ box.querySelector('.x').onclick=()=>{cm?box.replaceWith(cm.el):box.remove()};
+ box.querySelector('.ok').onclick=()=>{const t=ta.value.trim();if(!t)return box.querySelector('.x').click();const c=cm||{id:++S.seq,...base};c.text=t;if(!cm)S.comments.push(c);
+  c.el=view(c,fileLevel,cols);box.replaceWith(c.el);upd()}}
+function view(c,fileLevel,cols){const v=document.createElement(fileLevel?'div':'tr');v.className=fileLevel?'fcm':'cmt';
+ const inner=`<div class="bub">${fileLevel?'<b>File comment:</b> ':''}${esc(c.text)}</div><button class="g e">Edit</button><button class="g del">Delete</button>`;
+ v.innerHTML=fileLevel?inner:`<td colspan="${cols}">${inner}</td>`;v.querySelector('.e').onclick=ev=>{ev.stopPropagation();editor(null,c,c,fileLevel)};
+ v.querySelector('.del').onclick=ev=>{ev.stopPropagation();S.comments=S.comments.filter(x=>x!==c);v.remove();upd()};return v}
+function restoreComments(){for(const c of S.comments){const el=document.getElementById('f:'+c.file);if(!el)continue;if(c.line==null){c.el=view(c,true);el.querySelector('.fcms').appendChild(c.el);continue}
+ const tr=el.querySelector(`tr[data-line="${c.line}"]`);if(tr){c.el=view(c,false,S.mode=='split'?4:3);tr.after(c.el)}}}
+function upd(){$('#msg').textContent=S.comments.length?S.comments.length+' comment'+(S.comments.length==1?'':'s'):''}
+
+// ---------- controls
+$$('.tabs div').forEach(t=>t.onclick=()=>{$$('.tabs div').forEach(x=>x.classList.toggle('on',x==t));S.tab=t.dataset.t;renderSide()});
+$('#repos').onchange=async e=>{if(!guard()){e.target.value=S.repo;return}S.repo=e.target.value;await loadRepo()};
+$('#scope').value=S.scope;$('#scope').onchange=async e=>{if(!guard()){e.target.value=S.scope;return}S.scope=e.target.value;S.commit=null;$('#base').disabled=S.scope!='all';await loadDiff()};
+$('#base').onchange=async e=>{if(!guard()){e.target.value=S.base;return}S.base=e.target.value;await loadDiff()};
+$('#allf').onclick=()=>{$('#pane').scrollTop=0};
+$('#srch').onclick=()=>{const q=$('#q');q.style.display=q.style.display=='block'?'none':'block';q.focus()};$('#q').oninput=e=>{S.q=e.target.value.toLowerCase();renderSide()};
+$('#colall').onclick=()=>{const dirs=$$('#list .tn[data-dir]').map(e=>e.dataset.dir);if(S.collapsedDirs.size)S.collapsedDirs.clear();else dirs.forEach(d=>S.collapsedDirs.add(d));renderSide()};
+$('#filt').onclick=()=>{S.hideViewed=!S.hideViewed;$('#filt').style.color=S.hideViewed?'var(--hl)':'';renderSide()};
+$('#colf').onclick=()=>{const fs=$$('.file');const any=fs.some(f=>!f.classList.contains('c'));fs.forEach(f=>f.classList.toggle('c',any))};
+$('#tog').onclick=()=>$('#side').classList.toggle('hide');
+$('#wrapb').onclick=()=>{document.body.classList.toggle('nowrap');const on=document.body.classList.contains('nowrap');$$('table.df td').forEach(td=>td.style.whiteSpace=on?'pre':'')};
+function setMode(m){S.mode=m;localStorage.dr_mode=m;$$('#mode div').forEach(x=>x.classList.toggle('on',x.dataset.m==m));}
+setMode(S.mode);$$('#mode div').forEach(x=>x.onclick=()=>{setMode(x.dataset.m);renderPane()});
+$('#sub').onclick=async()=>{const s=$('#sum').value.trim();if(!S.comments.length&&!s)return alert('Add a comment or summary first');$('#sub').disabled=true;$('#msg').textContent='Sending…';
+ const body={repo:S.repo,summary:s,scope:S.commit?'commit':S.scope,base:(S.scope=='all'||S.commit)?S.base:'',commit:S.commit||'',comments:S.comments.map(({file,line,side,code,text})=>({file,line,side,code,text}))};
+ try{const r=await api('/api/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(r.ok){S.comments=[];$('#sum').value='';renderPane();$('#msg').textContent='Sent ✓'}else $('#msg').textContent='Failed: '+r.error+' (saved to pending.jsonl)'}
+ catch(e){$('#msg').textContent='Failed: '+e}$('#sub').disabled=false};
+loadRepos();
+</script></body></html>
