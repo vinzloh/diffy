@@ -60,7 +60,7 @@ button{background:#238636;color:#fff;border:0;border-radius:6px;padding:5px 12px
   <div class="row"><select id="scope">
    <option value="all">All changes since base</option><option value="uncommitted">Uncommitted changes</option>
    <option value="staged">Staged changes</option><option value="unstaged">Unstaged changes</option><option value="last">Last commit</option></select></div>
-  <div class="cmp">COMPARE AGAINST <select id="base"></select></div>
+  <div class="cmp">COMPARE AGAINST <select id="base"></select><span class="ib" id="refbtn" title="Refresh">↻</span></div>
   <div class="allf" id="allf"><span>📂 All files</span><span class="cnt"><span class="a" id="ta"></span> <span class="d" id="td"></span></span></div>
   <div class="tools"><span title="Viewed">👁</span><span id="vcount">0/0</span><span class="sp"></span><span class="ib" id="srch" title="Search">⌕</span><span class="ib" id="colall" title="Collapse folders">⇊</span><span class="ib" id="filt" title="Hide viewed">⚲</span></div>
   <input id="q" placeholder="Filter files…">
@@ -104,11 +104,23 @@ function parse(d){const out=[];for(const f of d.split(/^(?=diff --git )/m)){if(!
  const ext=path.split('/').pop().toLowerCase();out.push({path,st,hunks,add,del,binary,lang:LANG[ext.includes('.')?ext.split('.').pop():ext]});}
  return out}
 
-async function loadRepos(){const r=await api('/api/repos');$('#m').textContent='@ '+r.machine;
- $('#repos').innerHTML=r.repos.map(x=>`<option value="${esc(x.name)}">${esc(x.name)} · ${esc(x.branch)} · ${x.dirty} dirty</option>`).join('');
- const want=LS.dr_repo;S.repo=r.repos.some(x=>x.name==want)?want:(r.repos[0]||{}).name;$('#repos').value=S.repo;await loadRepo();}
+function readUrl(){const u=new URL(location.href);return{repo:u.searchParams.get('repo')||'',scope:u.searchParams.get('scope')||'',base:u.searchParams.get('base')||''}}
+function writeUrl(){const u=new URL(location.href);const set=(k,v)=>{if(v)u.searchParams.set(k,v);else u.searchParams.delete(k)};
+ set('repo',S.repo);set('scope',S.scope);set('base',S.base);history.replaceState(null,'',u.pathname+u.search+u.hash)}
+function applyUrl(){const U=readUrl();if(U.scope&&['all','uncommitted','staged','unstaged','last'].includes(U.scope))S.scope=U.scope;
+ if(U.base)S.base=U.base;if(U.repo)S.repo=U.repo;$('#scope').value=S.scope;$('#base').disabled=S.scope!='all'}
+function fillRepos(r){$('#repos').innerHTML=r.repos.map(x=>`<option value="${esc(x.name)}">${esc(x.name)} · ${esc(x.branch)} · ${x.dirty} dirty</option>`).join('')}
+async function loadRepos(){const r=await api('/api/repos');$('#m').textContent='@ '+r.machine;fillRepos(r);
+ const want=S.repo||LS.dr_repo;S.repo=r.repos.some(x=>x.name==want)?want:(r.repos[0]||{}).name;$('#repos').value=S.repo;await loadRepo();}
 async function loadRepo(){if(!S.repo)return;LS.dr_repo=S.repo;const b=await api('/api/branches?'+qs({repo:S.repo}));
- S.base=b.default;$('#base').innerHTML=b.refs.map(r=>`<option${r==S.base?' selected':''}>${esc(r)}</option>`).join('');S.commit=null;await loadDiff();}
+ S.base=b.refs.includes(S.base)?S.base:b.default;$('#base').innerHTML=b.refs.map(r=>`<option${r==S.base?' selected':''}>${esc(r)}</option>`).join('');
+ S.commit=null;writeUrl();await loadDiff();}
+async function refresh(){if(!S.repo||!guard())return;
+ const r=await api('/api/repos');fillRepos(r);
+ if(r.repos.some(x=>x.name==S.repo))$('#repos').value=S.repo;else{S.repo=(r.repos[0]||{}).name;$('#repos').value=S.repo}
+ const b=await api('/api/branches?'+qs({repo:S.repo}));
+ S.base=b.refs.includes(S.base)?S.base:b.default;$('#base').innerHTML=b.refs.map(r=>`<option${r==S.base?' selected':''}>${esc(r)}</option>`).join('');
+ writeUrl();await loadDiff();}
 function guard(){return !S.comments.length||confirm('Discard '+S.comments.length+' unsent comment(s)?')}
 async function loadDiff(){S.comments=[];upd();$('#pane').innerHTML='<div class="empty">Loading…</div>';
  const p={repo:S.repo,scope:S.commit?'commit':S.scope,base:S.base,commit:S.commit};const r=await api('/api/diff?'+qs(p));
@@ -192,9 +204,9 @@ function upd(){$('#msg').textContent=S.comments.length?S.comments.length+' comme
 
 // ---------- controls
 $$('.tabs div').forEach(t=>t.onclick=()=>{$$('.tabs div').forEach(x=>x.classList.toggle('on',x==t));S.tab=t.dataset.t;renderSide()});
-$('#repos').onchange=async e=>{if(!guard()){e.target.value=S.repo;return}S.repo=e.target.value;await loadRepo()};
-$('#scope').value=S.scope;$('#scope').onchange=async e=>{if(!guard()){e.target.value=S.scope;return}S.scope=e.target.value;S.commit=null;$('#base').disabled=S.scope!='all';await loadDiff()};
-$('#base').onchange=async e=>{if(!guard()){e.target.value=S.base;return}S.base=e.target.value;await loadDiff()};
+$('#repos').onchange=async e=>{if(!guard()){e.target.value=S.repo;return}S.repo=e.target.value;writeUrl();await loadRepo()};
+$('#scope').value=S.scope;$('#scope').onchange=async e=>{if(!guard()){e.target.value=S.scope;return}S.scope=e.target.value;S.commit=null;$('#base').disabled=S.scope!='all';writeUrl();await loadDiff()};
+$('#base').onchange=async e=>{if(!guard()){e.target.value=S.base;return}S.base=e.target.value;writeUrl();await loadDiff()};
 $('#allf').onclick=()=>{$('#pane').scrollTop=0};
 $('#srch').onclick=()=>{const q=$('#q');q.style.display=q.style.display=='block'?'none':'block';q.focus()};$('#q').oninput=e=>{S.q=e.target.value.toLowerCase();renderSide()};
 $('#colall').onclick=()=>{const dirs=$$('#list .tn[data-dir]').map(e=>e.dataset.dir);if(S.collapsedDirs.size)S.collapsedDirs.clear();else dirs.forEach(d=>S.collapsedDirs.add(d));renderSide()};
@@ -209,5 +221,5 @@ $('#sub').onclick=async()=>{const s=$('#sum').value.trim();if(!S.comments.length
  try{const r=await api('/api/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   if(r.ok){S.comments=[];$('#sum').value='';renderPane();$('#msg').textContent='Sent ✓'}else $('#msg').textContent='Failed: '+r.error+' (saved to pending.jsonl)'}
  catch(e){$('#msg').textContent='Failed: '+e}$('#sub').disabled=false};
-loadRepos();
+$('#refbtn').onclick=()=>refresh();applyUrl();loadRepos();
 </script></body></html>
