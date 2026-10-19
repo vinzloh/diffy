@@ -112,11 +112,14 @@ async function loadRepo(){if(!S.repo)return;LS.dr_repo=S.repo;const b=await api(
 function guard(){return !S.comments.length||confirm('Discard '+S.comments.length+' unsent comment(s)?')}
 async function loadDiff(){S.comments=[];upd();$('#pane').innerHTML='<div class="empty">Loading…</div>';
  const p={repo:S.repo,scope:S.commit?'commit':S.scope,base:S.base,commit:S.commit};const r=await api('/api/diff?'+qs(p));
- S.files=parse(r.diff||'');S.cmeta=r.commit;renderSide();renderPane();}
+ S.files=treeOrder(parse(r.diff||''));S.cmeta=r.commit;renderSide();renderPane();}
 
 // ---------- sidebar
 function tree(files){const root={d:{},f:[],add:0,del:0};for(const f of files){let n=root;n.add+=f.add;n.del+=f.del;const parts=f.path.split('/');
  for(const p of parts.slice(0,-1)){n=n.d[p]=n.d[p]||{d:{},f:[],add:0,del:0};n.add+=f.add;n.del+=f.del}n.f.push(f)}return root}
+// one shared order for sidebar and diff pane: folders first (by name), then files (by path)
+const dirKeys=n=>Object.keys(n.d).sort(),dirFiles=n=>n.f.sort((a,b)=>a.path.localeCompare(b.path));
+function treeOrder(files){const out=[],w=n=>{for(const k of dirKeys(n))w(n.d[k]);out.push(...dirFiles(n))};w(tree(files));return out}
 function cnt(a,d){return `<span class="cnt">${a?`<span class="a">+${a}</span>`:''} ${d?`<span class="d">-${d}</span>`:''}</span>`}
 function renderSide(){const v=viewed();
  $('#treeHead').hidden=S.tab=='commits';$('#commitHead').hidden=S.tab!='commits';
@@ -125,11 +128,11 @@ function renderSide(){const v=viewed();
  $('#vcount').textContent=S.files.filter(f=>v.has(f.path)).length+'/'+S.files.length;
  if(S.tab=='commits')return renderCommits();
  if(S.tab=='status')return renderStatus();
- let h='';const walk=(n,path,dep)=>{for(const k of Object.keys(n.d).sort()){let c=n.d[k],name=k,p=path+k;
+ let h='';const walk=(n,path,dep)=>{for(const k of dirKeys(n)){let c=n.d[k],name=k,p=path+k;
    while(!c.f.length&&Object.keys(c.d).length==1){const k2=Object.keys(c.d)[0];name+='/'+k2;p+='/'+k2;c=c.d[k2]}
    const col=S.collapsedDirs.has(p);h+=`<div class="tn" data-dir="${esc(p)}" style="padding-left:${8+dep*14}px"><span class="car">${col?'›':'⌄'}</span><span class="nm">${esc(name)}</span>${cnt(c.add,c.del)}</div>`;
    if(!col)walk(c,p+'/',dep+1)}
-  for(const f of n.f.sort((a,b)=>a.path.localeCompare(b.path)))h+=fileRow(f,f.path.split('/').pop(),dep,v)};
+  for(const f of dirFiles(n))h+=fileRow(f,f.path.split('/').pop(),dep,v)};
  walk(tree(files),'',0);$('#list').innerHTML=h||'<div class="empty">No changes</div>';bindSide();}
 function fileRow(f,name,dep,v){return `<div class="tn" data-f="${esc(f.path)}" style="padding-left:${8+dep*14}px"><span class="vc${v.has(f.path)?' on':''}" data-vc="${esc(f.path)}"></span><span class="dot${v.has(f.path)?' v':''}"></span><span class="st ${f.st}">${f.st}</span><span class="nm">${esc(name)}</span>${cnt(f.add,f.del)}</div>`}
 async function renderStatus(){const r=await api('/api/status?'+qs({repo:S.repo}));const v=viewed();const g={Staged:[],Unstaged:[],Untracked:[]};
