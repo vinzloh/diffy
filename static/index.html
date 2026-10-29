@@ -86,7 +86,8 @@ const diffyKey=()=>{try{return sessionStorage.getItem("diffyKey")||memKey}catch(
 const api=async(p,o={})=>{const k=diffyKey();if(k)o={...o,headers:{...(o.headers||{}),"X-Diffy-Key":k}};const r=await fetch(p,o);
   if(r.status===401){if(k){try{sessionStorage.removeItem("diffyKey")}catch(e){}}location.replace(k?"/?k="+encodeURIComponent(k):"/");}return r.json()};
 const qs=o=>Object.entries(o).filter(([k,v])=>v!=null&&v!=='').map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
-const vkey=()=>'dr_viewed:'+S.repo+':'+(S.scope=='commit'?S.commit:S.scope+':'+S.base);
+const serveId='__DIFFY_SERVE_ID__';
+const vkey=()=>'dr_viewed:'+serveId+':'+S.repo+':'+(S.scope=='commit'?S.commit:S.scope+':'+S.base);
 const viewed=()=>{try{return new Set(JSON.parse(LS[vkey()]||'[]'))}catch{return new Set()}};
 const setViewed=(f,on)=>{const v=viewed();on?v.add(f):v.delete(f);LS[vkey()]=JSON.stringify([...v]);};
 function ago(ts){const s=Date.now()/1e3-ts;for(const[u,n]of[['y',31536e3],['mo',2592e3],['d',86400],['h',3600],['m',60]])if(s>=n)return Math.floor(s/n)+u;return 'now'}
